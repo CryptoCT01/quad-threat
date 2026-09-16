@@ -3,8 +3,8 @@ controller_name: pmm_simple
 controller_type: market_making
 connector_name: bitget_perpetual
 trading_pair: BTC-USDT
-buy_spreads: "0.0005"
-sell_spreads: "0.0005"
+buy_spreads: "0.0008"
+sell_spreads: "0.0008"
 buy_amounts_pct: "100"
 sell_amounts_pct: "100"
 executor_refresh_time: 60
@@ -12,9 +12,9 @@ cooldown_time: 5
 leverage: 100
 position_mode: ONEWAY
 total_amount_quote: 200
-stop_loss: 0.003
+stop_loss: 0.0015
 take_profit: 0.0006
-time_limit: 7200
+time_limit: 180
 take_profit_order_type: LIMIT
 position_rebalance_threshold_pct: 0.01
 crash_halt_pct: 0.006

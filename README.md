@@ -80,7 +80,7 @@ Install into a Hummingbot tree under `controllers/generic/` and matching `conf/`
   - `strategies/disciplined_perps_strategy/{strategy.md,config.yml,learnings.md}`
   - `routines/market_analysis.py` + `routines/__init__.py`
 - Optional MCP tool: `condor-mcp/executors.py` (copy into Condor’s hummingbot_api tools if you use the custom executor helpers)
-- LLM: set `agent_key: openrouter:YOUR_MODEL_HERE` (placeholder — no live model id committed)
+- LLM: set `agent_key: openrouter:YOUR_MODEL_HERE (placeholder — no live model id committed)
 - Needs OpenRouter key in Condor `.env` (see `.env.example`)
 
 Copy the agent folder into your Condor `agents/` tree. Start Condor per upstream docs; start the strategy in **paper** first.
@@ -94,7 +94,7 @@ Copy the agent folder into your Condor `agents/` tree. Start Condor per upstream
   - `conf/e4/controllers/conf_e4_pmm_btc.yml`
   - `conf/e4/controllers/conf_e4_pmm_eth.yml`
   - `conf/e4/scripts/conf_e4_pmm.yml`
-- Live BTC/ETH snapshot from YAML: spreads **`0.0005` (5 bps)** each side, refresh **60s**, `total_amount_quote: 200`, leverage **100**, SL **0.3%**, TP **0.06%**, ONEWAY
+- Live BTC/ETH snapshot from YAML: spreads **`0.0008` (5 bps)** each side, refresh **60s**, `total_amount_quote: 200`, leverage **100**, SL **0.3%**, TP **0.06%**, ONEWAY
 - Script conf also lists XRP/DOGE controller files on the live desk; those YAML files are **not** in this public pack (BTC+ETH only). Add your own if you need them.
 
 ---
@@ -109,28 +109,13 @@ Point `HBOT_*` paths at your local Hummingbot/Condor installs. No keys in the HT
 
 ---
 
-## Current live snapshot notes
+## Current live snapshot (synced from desk)
 
-Taken from the desk configs packaged here (scrubbed). Re-read YAML on your clone before sizing capital.
+- **E2 OPEN basket:** XAU-USDT, CL-USDT, DOGE-USDT, NEAR-USDT, LTC-USDT (20×)
+- **E2 model:** set `agent_key` in strategy.md (placeholder `openrouter:YOUR_MODEL_HERE` — live desk uses DeepSeek V4.1 Flash via OpenRouter)
+- **E4:** BTC-USDT + ETH-USDT only · spreads **8 bps** (`0.0008`) · TP **6 bps LIMIT** · SL **15 bps** · `time_limit` **180s** · leverage **100** · `total_amount_quote` 200
+- **E1:** max 3 slots · $10 margin · score_threshold 0.66 · closed 15m · does not open E2 basket or BTC/ETH
 
-| Item | Value in this pack |
-|---|---|
-| E1 max slots | 3 |
-| E1 margin | $10 |
-| E1 SL/TP/trail | 0.8% / 1.6% / 1.2%,0.8% |
-| E1 score | 0.66 |
-| E2 basket (OPEN only) | **XAU / CL / DOGE / NEAR / APT** USDT-M |
-| E2 tick | 300s |
-| E2 max positions | 3 |
-| E2 agent_key | `openrouter:YOUR_MODEL_HERE` (placeholder) |
-| E4 pairs in pack | BTC-USDT, ETH-USDT |
-| E4 spreads | 5 bps (`0.0005`) |
-| E4 quote size | `total_amount_quote: 200` |
-| Dashboard | `:8770` |
-
-> Tip for Michael: if someone says “engine 3,” they mean **Engine 4 (Maker)** — there is still no Engine 3 controller.
-
----
 
 ## Repo layout
 

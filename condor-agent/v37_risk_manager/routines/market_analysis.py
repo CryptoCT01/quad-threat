@@ -198,3 +198,23 @@ async def run(config: Config, context: ContextTypes.DEFAULT_TYPE) -> RoutineResu
         )
         lines.append("")
     if errors:
+        lines.append(f"Skipped: {'; '.join(errors[:5])}")
+
+    table_data = [
+        {
+            "pair": r["pair"],
+            "setup": r["setup"],
+            "factors": r["factors"],
+            "impulse": r["impulse"],
+            "dir_1h": r["dir_1h"],
+            "range": r["range"],
+            "atr%": r["atr_pct"],
+            "lev": 20,
+        }
+        for r in results
+    ]
+    return RoutineResult(
+        text="\n".join(lines),
+        table_data=table_data,
+        table_columns=["pair", "setup", "factors", "impulse", "dir_1h", "range", "atr%", "lev"],
+    )

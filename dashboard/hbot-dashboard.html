@@ -48,7 +48,7 @@ body{display:flex;flex-direction:column;background:
 .quad-brand .qf{font-size:15px;animation:quadFlick 1.5s ease-in-out infinite}
 @keyframes quadPulse{0%,100%{opacity:.82;transform:translateY(0)}50%{opacity:1;transform:translateY(-1px)}}
 @keyframes quadShine{0%{background-position:0% 50%}100%{background-position:220% 50%}}
-@keyframes quadFlick{0%,100%{transform:scale(1) rotate(-6deg)}50%{transform:scale(1.22) rotate(6deg)}}
+@keyframes quadFlick{0%,100%{transform:scale(1) rotate(0deg)}50%{transform:scale(1.08) rotate(0deg)}}
 .hunt-rail{flex:1;min-width:140px;position:relative;overflow:hidden;display:flex;align-items:center;border:1px solid rgba(61,224,255,.2);border-radius:8px;background:linear-gradient(90deg,rgba(4,8,16,.4),rgba(61,224,255,.07),rgba(183,148,255,.08),rgba(4,8,16,.4));height:auto}
 .hunt-rail:before{content:'';position:absolute;top:0;bottom:0;width:34%;background:linear-gradient(90deg,transparent,rgba(61,224,255,.28),transparent);animation:huntSweep 2.6s ease-in-out infinite;pointer-events:none}
 @keyframes huntSweep{0%{transform:translateX(-90%)}100%{transform:translateX(340%)}}
@@ -545,9 +545,9 @@ body{display:flex;flex-direction:column;background:
       <div class="sb-label">Volume</div>
       <div class="sb-value" id="sbVolume">—</div>
     </div>
-    <div class="sb-item">
-      <div class="sb-label">Uni</div>
-      <div class="sb-value" id="sbUniverse">22+2</div>
+    <div class="sb-item" id="sbRebateItem" title="50% of today's Bitget fees (accrued, resets 00:00 BST)">
+      <div class="sb-label">Rebate 50%</div>
+      <div class="sb-value" id="sbRebate">$0.00</div>
     </div>
   </div>
 </div>
@@ -559,14 +559,16 @@ body{display:flex;flex-direction:column;background:
         <div class="chart-header">
           <div class="panel-title" style="padding:0"><div class="dot"></div>CHART</div>
           <select id="chartSymbol">
-            <optgroup label="Crypto">
-              <option>BTC-USDT</option><option>ETH-USDT</option><option>SOL-USDT</option>
-              <option>XRP-USDT</option><option>SUI-USDT</option><option>DOGE-USDT</option>
-              <option>LINK-USDT</option><option>DOT-USDT</option><option>ARB-USDT</option>
-              <option>FET-USDT</option>
+            <optgroup label="E4 maker">
+              <option>BTC-USDT</option><option>ETH-USDT</option>
             </optgroup>
-            <optgroup label="Commodities">
-              <option>XAU-USDT</option><option>CL-USDT</option>
+            <optgroup label="E1 momentum">
+              <option>SOL-USDT</option><option>XRP-USDT</option><option>BNB-USDT</option>
+              <option>ADA-USDT</option><option>AVAX-USDT</option>
+            </optgroup>
+            <optgroup label="E2 Condor">
+              <option>XAU-USDT</option><option>CL-USDT</option><option>DOGE-USDT</option>
+              <option>NEAR-USDT</option><option>LTC-USDT</option>
             </optgroup>
             <optgroup label="Stock perps">
               <option>TSLA-USDT</option><option>NVDA-USDT</option><option>AAPL-USDT</option>
@@ -577,6 +579,7 @@ body{display:flex;flex-direction:column;background:
           </select>
           <span class="chart-meta" id="chartPrice">—</span>
           <span class="chart-meta" id="chartChg" style="margin-left:6px">—</span>
+          <span class="chart-meta" id="chartLevels" style="margin-left:8px;color:var(--text-dim)">—</span>
           <div style="margin-left:auto;display:flex;gap:4px" id="tfChips">
             <button type="button" class="tf-chip active" data-tf="15m">15m</button>
             <button type="button" class="tf-chip" data-tf="1h">1H</button>
@@ -653,7 +656,7 @@ body{display:flex;flex-direction:column;background:
           <div class="eng-ctrl" style="margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">E2 <span class="mono" id="agentSlots">—/3</span> · <span class="mono" id="agentPnl">$0.00</span> · <span class="mono" id="agentLast" onclick="engine2History()" title="Open History for full thesis">—</span></div>
           <div class="e2-timer-wrap">
             <div class="e2-timer" id="agentCountdown">5:00</div>
-            <div class="e2-timer-meta">next tick</div>
+            <div class="e2-timer-meta" id="agentCountdownMeta">next tick</div>
             <div class="e2-timer-bar"><span id="agentCountdownBar"></span></div>
           </div>
           <span id="agentFreq" style="display:none"></span>
@@ -675,7 +678,7 @@ body{display:flex;flex-direction:column;background:
         <div class="eng-id"><span class="eng-dot off" id="dotE4s"></span>E4</div>
         <div class="eng-body">
           <div class="eng-name">MAKER</div>
-          <div class="eng-ctrl">pmm_simple · BTC ETH XRP DOGE · 5bps/8bps · 10x · $10 margin</div>
+          <div class="eng-ctrl">pmm_simple · BTC ETH · 12bps LIMIT TP / 80bps SL · 100x · ~$1 clip</div>
           <div class="eng-toggle">
             <button class="bot-ctrl-btn" id="e4On" onclick="engine4Action('start')" style="font-size:8px;padding:2px 7px">ON</button>
             <button class="bot-ctrl-btn" id="e4Off" onclick="engine4Action('stop')" style="font-size:8px;padding:2px 7px">OFF</button>
@@ -782,12 +785,12 @@ body{display:flex;flex-direction:column;background:
                       <option value="ETH-USDT">ETH-USDT</option>
                       <option value="SOL-USDT">SOL-USDT</option>
                       <option value="XRP-USDT">XRP-USDT</option>
-                      <option value="SUI-USDT">SUI-USDT</option>
+                      <option value="BNB-USDT">BNB-USDT</option>
+<option value="ADA-USDT">ADA-USDT</option>
+<option value="AVAX-USDT">AVAX-USDT</option>
                       <option value="DOGE-USDT">DOGE-USDT</option>
-                      <option value="LINK-USDT">LINK-USDT</option>
-                      <option value="DOT-USDT">DOT-USDT</option>
-                      <option value="ARB-USDT">ARB-USDT</option>
-                      <option value="FET-USDT">FET-USDT</option>
+                      <option value="NEAR-USDT">NEAR-USDT</option>
+<option value="LTC-USDT">LTC-USDT</option>
                     </optgroup>
                     <optgroup label="Commodities">
                       <option value="XAU-USDT">XAU-USDT (Gold)</option>
@@ -1065,6 +1068,8 @@ var BOT_NAME = 'hummingbot';
 var _chart = null, _candleSeries = null, _volumeSeries = null;
 var _chartTf = '15m';
 var _chartReady = false;
+var _chartLines = [];
+var _chartLastPx = 0;
 var _strategies = {SUPER_A:true, ROC_RSI:true, BB_VOL:true};
 var _stratIdMap = {SUPER_A:'stratSuperA', ROC_RSI:'stratRocRsi', BB_VOL:'stratBbVol'};
 var _stratMeta = {};
@@ -1096,7 +1101,9 @@ function bookSplit(){
       e2.push(pair);
       return;
     }
-    if(_e4Status && _e4Status.running && e4pairs[pair]){
+    // BTC/ETH are E4 inventory even when the quoter is idle. Gating on
+    // _e4Status.running dumped them into PERSONAL (gold chip).
+    if(e4pairs[pair]){
       e4inv.push(pair);
       return;
     }
@@ -1110,8 +1117,11 @@ function bookSplit(){
 }
 function tagPosition(pair){
   var b = bookSplit();
+  var opens = (_botSignals && _botSignals.open_pairs) || ((_scanData && _scanData.bot_open_pairs) || []);
+  if(pair === 'BTC-USDT' || pair === 'ETH-USDT') return 'E4';
   if(b.e2.indexOf(pair) >= 0) return 'E2';
   if(b.e4inv.indexOf(pair) >= 0) return 'E4';
+  if(opens.indexOf(pair) >= 0) return 'E1';
   if(b.e1.indexOf(pair) >= 0) return 'E1';
   if(b.you.indexOf(pair) >= 0) return 'PERSONAL';
   var uni = universeSet();
@@ -1162,8 +1172,8 @@ var _botPhase = 'idle';
 var _botStartPoll = null;
 var _lastBotRunning = false;
 var SYMBOLS = [
-  'BTC-USDT','ETH-USDT','SOL-USDT','XRP-USDT','SUI-USDT','DOGE-USDT','LINK-USDT','DOT-USDT','ARB-USDT','FET-USDT',
-  'XAU-USDT','CL-USDT',
+  'BTC-USDT','ETH-USDT','SOL-USDT','XRP-USDT','BNB-USDT','ADA-USDT','AVAX-USDT',
+  'XAU-USDT','CL-USDT','DOGE-USDT','NEAR-USDT','LTC-USDT',
   'TSLA-USDT','NVDA-USDT','AAPL-USDT','AMZN-USDT','META-USDT','MSFT-USDT','GOOGL-USDT','COIN-USDT','MSTR-USDT','HOOD-USDT','PLTR-USDT','AMD-USDT'
 ];
 var COMMODITY_SYMBOLS = ['XAU-USDT','CL-USDT'];
@@ -1339,6 +1349,8 @@ document.addEventListener('DOMContentLoaded', function(){
   setInterval(condorAction, 30000, 'status');
   setInterval(refreshAgentStatus, 10000);
   setInterval(refreshE4Status, 8000);
+  setInterval(refreshRebate, 20000);
+  refreshRebate();
   setInterval(function(){ fetchChart(document.getElementById('chartSymbol').value, false); }, 30000);
 });
 
@@ -1396,6 +1408,64 @@ function setChartLoading(on){
   if(on) el.classList.remove('hide'); else el.classList.add('hide');
 }
 
+
+function engineGeom(pair){
+  var e2 = {'XAU-USDT':1,'CL-USDT':1,'DOGE-USDT':1,'NEAR-USDT':1,'LTC-USDT':1};
+  if(pair==='BTC-USDT'||pair==='ETH-USDT') return {eng:'E4', tp:0.0012, sl:0.008, labelTp:'TP 12bps', labelSl:'SL 80bps'};
+  if(e2[pair]) return {eng:'E2', tp:0.004, sl:0.005, labelTp:'TP 0.4%', labelSl:'SL 0.5%'};
+  return {eng:'E1', tp:0.016, sl:0.008, labelTp:'TP 1.6%', labelSl:'SL 0.8%'};
+}
+function clearChartLevels(){
+  if(!_candleSeries) return;
+  (_chartLines||[]).forEach(function(l){ try{ _candleSeries.removePriceLine(l); }catch(e){} });
+  _chartLines = [];
+}
+function applyChartLevels(pair, lastPx){
+  clearChartLevels();
+  var el = document.getElementById('chartLevels');
+  if(!_candleSeries || !pair){
+    if(el) el.textContent = '—';
+    return;
+  }
+  var g = engineGeom(pair);
+  var pos = (_lastPositions||[]).filter(function(p){ return (p.trading_pair||'')===pair; })[0];
+  var LS = (typeof LightweightCharts!=='undefined' && LightweightCharts.LineStyle) || {Dashed:2, Solid:0};
+  function add(price, color, title, dashed){
+    if(!price || !isFinite(price) || price<=0) return;
+    var line = _candleSeries.createPriceLine({
+      price: price,
+      color: color,
+      lineWidth: dashed ? 1 : 2,
+      lineStyle: dashed ? (LS.Dashed||2) : (LS.Solid||0),
+      axisLabelVisible: true,
+      title: title
+    });
+    _chartLines.push(line);
+  }
+  var px = Number(lastPx)||_chartLastPx||0;
+  if(pos){
+    var entry = Number(pos.entry_price)||0;
+    var side = String(pos.side||'').toUpperCase();
+    var long = (side==='BUY'||side==='LONG');
+    var tp = Number(pos.take_profit_price||pos.tp_price||0)||0;
+    var sl = Number(pos.stop_loss_price||pos.sl_price||0)||0;
+    if(entry>0){
+      add(entry, '#4da6ff', 'ENTRY', false);
+      if(!(tp>0)) tp = long ? entry*(1+g.tp) : entry*(1-g.tp);
+      if(!(sl>0)) sl = long ? entry*(1-g.sl) : entry*(1+g.sl);
+    }
+    add(tp, '#00e8a0', g.labelTp, false);
+    add(sl, '#ff4d78', g.labelSl, false);
+    if(el) el.textContent = g.eng+' · live · '+g.labelTp+' / '+g.labelSl;
+  } else if(px>0){
+    add(px*(1+g.tp), '#00e8a0', g.eng+' '+g.labelTp, true);
+    add(px*(1-g.sl), '#ff4d78', g.eng+' '+g.labelSl, true);
+    if(el) el.textContent = g.eng+' preview · '+g.labelTp+' / '+g.labelSl;
+  } else if(el){
+    el.textContent = g.eng+' · '+g.labelTp+' / '+g.labelSl;
+  }
+}
+
 function fetchChart(pair, showLoading){
   if(!_chartReady || !_candleSeries) return;
   if(showLoading) setChartLoading(true);
@@ -1430,6 +1500,8 @@ function fetchChart(pair, showLoading){
         el.textContent = (chg>=0?'+':'') + Number(chg).toFixed(2) + '%';
         el.style.color = chg>=0 ? 'var(--green)' : 'var(--red)';
       }
+      _chartLastPx = px;
+      applyChartLevels(pair, px);
     })
     .catch(function(e){
       setChartLoading(false);
@@ -1537,11 +1609,12 @@ function refreshAll(){
       if(d.running){
         st = 'RUNNING';
         _lastBotRunning = true;
+      } else if(d.uncertain && _lastBotRunning){
+        st = 'RUNNING';
       } else if(String(d.status||'').toUpperCase() === 'STARTING'){
         st = 'STARTING';
         _botPhase = 'starting';
       } else {
-        // Only trust STOPPED from CLI path — never from a flaky secondary source
         st = 'STOPPED';
         _lastBotRunning = false;
       }
@@ -1587,6 +1660,8 @@ function refreshAll(){
     if(!Array.isArray(pos)) pos = [];
     _lastPositions = pos;
     renderPositions(pos);
+    var _cs = document.getElementById('chartSymbol');
+    if(_cs && _chartReady) applyChartLevels(_cs.value, _chartLastPx);
     var posEl = document.getElementById('sbPositions');
     if(posEl) posEl.textContent = pos.length;
     if(_scanData || _botSignals) renderCandidates(_scanData || {});
@@ -1609,11 +1684,10 @@ function refreshAll(){
       if(d.universe.symbols && d.universe.symbols.length){
         SYMBOLS = d.universe.symbols.slice();
       }
-      var uEl = document.getElementById('sbUniverse');
       var e1n = (d.universe.e1_symbols || []).length;
+      var e2n = (d.universe.e2_symbols || []).length;
       var e4n = (d.universe.e4_symbols || []).length;
       if(!e1n) e1n = (d.universe.symbols || SYMBOLS).length;
-      if(uEl) uEl.textContent = e4n ? (e1n + '+' + e4n) : String(e1n);
       var cfgU = document.getElementById('cfgUniverse');
       if(cfgU) cfgU.textContent = e4n ? (e1n + '+' + e4n + ' pairs') : (e1n + ' pairs');
       var cfgS = document.getElementById('cfgSlots');
@@ -1637,9 +1711,26 @@ function refreshAll(){
       '<div class="sbd-empty">Scan offline — is the dashboard server running?</div>';
   });
 
+  refreshRebate();
   refreshPerf();
   refreshJournal();
   fetchJSON('/api/volume').then(paintVolume).catch(function(){});
+}
+
+function paintRebate(d){
+  var el = document.getElementById('sbRebate');
+  var item = document.getElementById('sbRebateItem');
+  if(!el) return;
+  var v = Number((d && d.rebate_accrued) || 0);
+  var fees = Number((d && d.fees_paid) || 0);
+  el.textContent = '$' + v.toFixed(2);
+  el.style.color = v > 0 ? 'var(--green)' : 'var(--muted)';
+  if(item){
+    item.title = 'Fees today $' + fees.toFixed(2) + ' · 50% rebate $' + v.toFixed(2) + ' (accrued, 00:00 BST). Credited $' + Number((d && d.rebate_credited) || 0).toFixed(2);
+  }
+}
+function refreshRebate(){
+  fetchJSON('/api/rebate').then(paintRebate).catch(function(){});
 }
 
 function paintEngDot(ids, on){
@@ -1783,7 +1874,8 @@ function renderScanner(market){
     var scoreHtml = scoreN==null ? '' :
       ('<div class="sym-score-val" style="color:'+(scoreN>0?'var(--green)':scoreN<0?'var(--red)':'var(--text-dim)')+'">'+(scoreN>=0?'+':'')+scoreN.toFixed(2)+'</div>');
     h += '<div class="'+cls+'" data-sym="'+escHtml(sym)+'" onclick="selectSymbol(\''+sym+'\')">';
-    h += '<div class="sym-name">'+escHtml(base)+' <span class="sym-lev">'+escHtml(String(lev))+'×</span></div>';
+    var eng = m.engine || (m.asset_class==='commodity'?'E2':'E1');
+    h += '<div class="sym-name">'+escHtml(base)+' <span class="sym-lev">'+escHtml(String(lev))+'×</span> <span class="sym-lev">'+escHtml(eng)+'</span></div>';
     h += '<div class="sym-price">'+fmtPr(m.last_price)+'</div>';
     h += '<div class="sym-change" style="color:'+chgCol+'">'+chgTxt+'</div>';
     h += scoreHtml;
@@ -1800,15 +1892,23 @@ var LEV_MAP = {};
 var _e4Status = {running:false, available:false, slots_used:0};
 function refreshE4Status(){
   fetchJSON('/api/e4/status').then(function(d){
-    _e4Status = d || {running:false, available:false, slots_used:0};
     var run = !!(d && d.running);
+    if(!run && d && d.uncertain && _e4Status && _e4Status.running) run = true;
+    _e4Status = d || {running:false, available:false, slots_used:0};
+    if(run) _e4Status.running = true;
     var st = run ? 'QUOTING' : ((d && d.engine) ? 'IDLE' : ((d && d.available) ? 'STOPPED' : 'DOWN'));
     var col = run ? 'var(--green)' : (st==='DOWN' ? 'var(--dim)' : 'var(--red)');
     paintEngDot(['dotE4','dotE4s'], run);
     paintOnOff('e4On', 'e4Off', run);
+    var e4extra = '';
+    if(run){
+      var pr = (_e4Status.pairs || []).map(function(p){ return String(p).replace('-USDT',''); });
+      if(pr.length) e4extra = ' · ' + pr.join('+');
+      else if(_e4Status.slots_used) e4extra = ' · slots ' + _e4Status.slots_used;
+    }
     ['sbE4Status','eng4Status'].forEach(function(id){
       var el = document.getElementById(id);
-      if(el){ el.textContent = st; el.style.color = col; }
+      if(el){ el.textContent = st + e4extra; el.style.color = col; }
     });
     var e1 = document.getElementById('eng1Status');
     var bot = document.getElementById('sbBotStatus');
@@ -1824,6 +1924,7 @@ function refreshE4Status(){
     if(e2s && badge) e2s.textContent = badge.textContent || '—';
     if(_scanData || _botSignals) renderCandidates(_scanData || {});
   }).catch(function(){
+    if(_e4Status && _e4Status.running) return;
     var el = document.getElementById('sbE4Status');
     if(el){ el.textContent = 'DOWN'; el.style.color = 'var(--dim)'; }
   });
@@ -2605,6 +2706,7 @@ var _e2CountdownTimer = null;
 var _e2FreqSec = 300;
 var _e2LastTickCount = null;
 var _e2StickyOn = false;
+var _e2RunNow = false;
 
 function engine1Action(action){
   var onBtn = document.getElementById('e1On');
@@ -2621,8 +2723,8 @@ function engine4Action(action){
   if(action==='start'){
     var ok = confirm(
       'Start Engine 4 LIVE maker?\n\n' +
-      '• pmm_simple on BTC ETH XRP DOGE\n' +
-      '• $10 margin × 10x = $100 notional\n' +
+      '• pmm_simple on BTC+ETH only\n' +
+      '• 12 bps LIMIT TP / 80 bps SL · 100x · ~$1 clip\n' +
       '• REAL Bitget quotes\n' +
       '• Engine 1 is not touched\n\n' +
       'OK only if you want the maker live.'
@@ -2675,24 +2777,47 @@ function engine2Action(action){
   var path = action === 'start' ? '/api/engine2/start' : '/api/engine2/stop';
   toast(action === 'start' ? 'Starting Condor Engine 2…' : 'Stopping Condor Engine 2…', 'info');
   fetchJSON(path, {method:'POST', body:JSON.stringify({}), timeout:30000}).then(function(d){
+    if(onBtn) onBtn.disabled = false; if(offBtn) offBtn.disabled = false;
     if(!d || (!d.ok && !d.already_running)) throw new Error((d && (d.error || (d.result && d.result.error))) || 'Engine 2 command failed');
     if(d.already_running) toast('Condor Engine 2 already running', 'success');
     else toast(action === 'start' ? 'Condor Engine 2 started' : 'Condor Engine 2 stopped', action === 'start' ? 'success' : 'info');
     if(action === 'start'){ _e2LastTickTime = Date.now(); }
     setTimeout(refreshAgentStatus, 700);
   }).catch(function(e){
+    if(onBtn) onBtn.disabled = false; if(offBtn) offBtn.disabled = false;
     toast(e.message || 'Engine 2 command failed', 'error');
     setTimeout(refreshAgentStatus, 700);
   });
 }
+function _e2PaintRunNow(){
+  var cd = document.getElementById('agentCountdown');
+  var bar = document.getElementById('agentCountdownBar');
+  var meta = document.getElementById('agentCountdownMeta');
+  var popupCd = document.getElementById('e2PopupCountdown');
+  if(cd){ cd.textContent = '0:00'; cd.classList.add('pulse'); cd.style.color = 'var(--gold)'; }
+  if(bar){ bar.style.width = '0%'; }
+  if(meta){ meta.textContent = 'RUNNING NOW'; }
+  if(popupCd){ popupCd.textContent = 'RUNNING NOW'; }
+}
 function engine2RunNow(){
-  /* Countdown is display-only. Never POST /start (that would spawn another session). */
+  /* Immediate tick on the EXISTING session. Never POST /start. */
+  if(!_e2StickyOn){
+    toast('press ON first', 'error');
+    return;
+  }
   var btn = document.getElementById('engine2RunNowBtn');
   if(btn) btn.disabled = true;
+  _e2RunNow = true;
+  _e2PaintRunNow();
   toast('Triggering Engine 2 tick now…', 'info');
   fetchJSON('/api/engine2/run-now', {method:'POST', body:JSON.stringify({}), timeout:20000}).then(function(d){
     if(btn) btn.disabled = false;
     if(!d || !d.ok) throw new Error((d && d.error) || 'Run Now failed');
+    _e2LastTickTime = Date.now();
+    _e2RunNow = false;
+    var meta = document.getElementById('agentCountdownMeta');
+    if(meta) meta.textContent = 'next tick';
+    _e2StartCountdown();
     if(d.already_ticking){
       toast('Engine 2 is already running this tick', 'info');
     } else {
@@ -2706,8 +2831,13 @@ function engine2RunNow(){
     }, 9000);
   }).catch(function(e){
     if(btn) btn.disabled = false;
+    _e2RunNow = false;
+    var meta = document.getElementById('agentCountdownMeta');
+    if(meta) meta.textContent = 'next tick';
+    if(_e2StickyOn) _e2StartCountdown();
     var msg = (e && e.message) || 'Engine 2 run failed';
-    toast(msg, 'error');
+    if(/press ON first|not running/i.test(msg)) toast('press ON first', 'error');
+    else toast(msg, 'error');
   });
 }
 function _e2StartCountdown(){
@@ -2716,6 +2846,7 @@ function _e2StartCountdown(){
     var cd = document.getElementById('agentCountdown');
     var bar = document.getElementById('agentCountdownBar');
     var popupCd = document.getElementById('e2PopupCountdown');
+    if(_e2RunNow){ _e2PaintRunNow(); return; }
     if(!_e2LastTickTime){ return; }
     var elapsed = Math.floor((Date.now() - _e2LastTickTime) / 1000);
     var remaining = Math.max(0, _e2FreqSec - elapsed);
@@ -2812,21 +2943,27 @@ function setAgentUI(d){
     last.title = thesis ? (action + ' — ' + thesis) : (short + ' · click History');
   }
   if(on){
-    var ts = d.last_tick_ts;
-    if(typeof ts === 'number' && ts > 0){
-      _e2LastTickTime = ts > 1e12 ? ts : ts * 1000;
-    } else if(d.tick_count !== _e2LastTickCount && d.tick_count != null){
-      _e2LastTickTime = Date.now();
-    } else if(!_e2LastTickTime){
-      _e2LastTickTime = Date.now();
+    if(_e2RunNow){
+      _e2PaintRunNow();
+    } else {
+      var ts = d.last_tick_ts;
+      if(typeof ts === 'number' && ts > 0){
+        _e2LastTickTime = ts > 1e12 ? ts : ts * 1000;
+      } else if(d.tick_count !== _e2LastTickCount && d.tick_count != null){
+        _e2LastTickTime = Date.now();
+      } else if(!_e2LastTickTime){
+        _e2LastTickTime = Date.now();
+      }
+      _e2LastTickCount = d.tick_count;
+      _e2StartCountdown();
     }
-    _e2LastTickCount = d.tick_count;
-    _e2StartCountdown();
   } else {
+    _e2RunNow = false;
     if(_e2CountdownTimer){ clearInterval(_e2CountdownTimer); _e2CountdownTimer=null; }
     _e2LastTickTime = null;
     var cd=document.getElementById('agentCountdown'); if(cd){ cd.textContent='—'; cd.classList.remove('pulse'); }
     var bar=document.getElementById('agentCountdownBar'); if(bar) bar.style.width='0';
+    var meta=document.getElementById('agentCountdownMeta'); if(meta) meta.textContent='next tick';
   }
 }
 function refreshAgentStatus(){
@@ -2989,6 +3126,15 @@ function refreshPerf(){
       el.style.color = pnl>0?'var(--green)':pnl<0?'var(--red)':'var(--text)';
     });
     ['perfTrades2','popTrades'].forEach(function(id){ var el=document.getElementById(id); if(el) el.textContent=trades; });
+    var e4b = (d.by_engine && d.by_engine.E4) || {};
+    var e4el = document.getElementById('perfE4Inline');
+    if(e4el) e4el.textContent = String(e4b.trades != null ? e4b.trades : 0);
+    var vel = document.getElementById('perfVolInline');
+    if(vel){
+      var vol = Number(d.volume||0);
+      vel.textContent = vol >= 1000 ? ('$'+(vol/1000).toFixed(1)+'k') : ('$'+vol.toFixed(0));
+    }
+
     ['perfSharpe2','popSharpe'].forEach(function(id){ var el=document.getElementById(id); if(el) el.textContent=sharpe; });
     var ddEl = document.getElementById('perfDD2'); if(ddEl) ddEl.textContent=dd;
     ['perfDD','popDD'].forEach(function(id){ var el=document.getElementById(id); if(el) el.textContent=dd; });
@@ -3601,9 +3747,9 @@ function condorLoadRoutineInstances(){
 
 var _condorOrderSide = 'long';
 var _condorLevMap = {
-  'BTC-USDT':100,'ETH-USDT':100,'SOL-USDT':10,'XRP-USDT':10,
-  'SUI-USDT':5,'DOGE-USDT':5,'LINK-USDT':5,'DOT-USDT':5,'ARB-USDT':5,'FET-USDT':5,
-  'XAU-USDT':5,'CL-USDT':5,
+  'BTC-USDT':100,'ETH-USDT':100,'SOL-USDT':10,'XRP-USDT':10,'BNB-USDT':5,'ADA-USDT':5,'AVAX-USDT':5,
+  'DOGE-USDT':20,'NEAR-USDT':20,'LTC-USDT':20,
+  'XAU-USDT':20,'CL-USDT':20,
   'TSLA-USDT':5,'NVDA-USDT':5,'AAPL-USDT':5,'AMZN-USDT':5,'META-USDT':5,
   'MSFT-USDT':5,'GOOGL-USDT':5,'COIN-USDT':5,'MSTR-USDT':5,'HOOD-USDT':5,
   'PLTR-USDT':5,'AMD-USDT':5

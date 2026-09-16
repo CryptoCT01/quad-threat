@@ -1,3 +1,204 @@
+"""
+v37_scalp_multi.py — Multi-pair directional controller (crypto + stock perps)
+
+- Scans full universe from conf/universe.yml
+- Respects dashboard strategy toggles (conf/active_strategy.json)
+- Ranks READY opportunities and opens best trades
+- Hard cap: max_open_positions (default 3)
+- Per-symbol leverage from universe map
+"""
+
+from __future__ import annotations
+
+import json
+import time
+from decimal import Decimal
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+import pandas as pd
+import yaml
+from pydantic import Field, field_validator
+
+from hummingbot.core.data_type.common import MarketDict, OrderType, PositionMode, PriceType, TradeType
+from hummingbot.data_feed.candles_feed.data_types import CandlesConfig
+from hummingbot.strategy_v2.controllers.controller_base import ControllerBase, ControllerConfigBase
+from hummingbot.strategy_v2.executors.data_types import ConnectorPair
+from hummingbot.strategy_v2.executors.position_executor.data_types import (
+    PositionExecutorConfig,
+    TrailingStop,
+    TripleBarrierConfig,
+)
+from hummingbot.strategy_v2.models.executor_actions import CreateExecutorAction, ExecutorAction
+from hummingbot.strategy_v2.utils.common import parse_enum_value
+
+_CONF_ROOTS = [
+    Path("/home/hummingbot/conf"),
+    Path(__file__).resolve().parents[2] / "conf",
+]
+_E4_PAIRS = {"BTC-USDT", "ETH-USDT"}
+_E2_BASKET = {"XAU-USDT", "CL-USDT", "DOGE-USDT", "NEAR-USDT", "LTC-USDT"}
+_STOCK_PAIRS = {
+    "TSLA-USDT", "NVDA-USDT", "AAPL-USDT", "AMZN-USDT", "META-USDT", "MSFT-USDT",
+    "GOOGL-USDT", "COIN-USDT", "MSTR-USDT", "HOOD-USDT", "PLTR-USDT", "AMD-USDT",
+}
+_E2_FILL_PATHS = [
+    Path("/home/hummingbot/data/e2_fills.jsonl"),
+    Path(__file__).resolve().parents[2] / "data" / "e2_fills.jsonl",
+]
+
+
+def _first_existing(*rels: str) -> Optional[Path]:
+    for root in _CONF_ROOTS:
+        for rel in rels:
+            p = root / rel
+            if p.is_file():
+                return p
+    return None
+
+
+def load_universe() -> Dict[str, Any]:
+    path = _first_existing("universe.yml")
+    default_crypto = [
+        {"symbol": "SOL-USDT", "leverage": 10, "tier": 2},
+        {"symbol": "XRP-USDT", "leverage": 10, "tier": 1},
+        {"symbol": "BNB-USDT", "leverage": 5, "tier": 2},
+        {"symbol": "ADA-USDT", "leverage": 5, "tier": 2},
+        {"symbol": "AVAX-USDT", "leverage": 5, "tier": 2},
+    ]
+    default_commodities: list = []
+    default_stocks = [
+        {"symbol": "TSLA-USDT", "leverage": 5, "tier": 2},
+        {"symbol": "NVDA-USDT", "leverage": 5, "tier": 2},
+        {"symbol": "AAPL-USDT", "leverage": 5, "tier": 2},
+        {"symbol": "AMZN-USDT", "leverage": 5, "tier": 2},
+        {"symbol": "META-USDT", "leverage": 5, "tier": 2},
+        {"symbol": "MSFT-USDT", "leverage": 5, "tier": 2},
+        {"symbol": "GOOGL-USDT", "leverage": 5, "tier": 2},
+        {"symbol": "COIN-USDT", "leverage": 5, "tier": 3},
+        {"symbol": "MSTR-USDT", "leverage": 5, "tier": 3},
+        {"symbol": "HOOD-USDT", "leverage": 5, "tier": 3},
+        {"symbol": "PLTR-USDT", "leverage": 5, "tier": 3},
+        {"symbol": "AMD-USDT", "leverage": 5, "tier": 3},
+    ]
+    data: Dict[str, Any] = {
+        "max_open_positions": 3,
+        "position_size_quote": 10,
+        "connector_name": "bitget_perpetual",
+        "crypto": default_crypto,
+        "commodities": default_commodities,
+        "stocks": default_stocks,
+        "stop_loss": 0.008,
+        "take_profit": 0.016,
+        "time_limit": 10800,
+        "trailing_stop": "0.005,0.003",
+        "cooldown_time": 1500,
+        "score_threshold": 0.66,
+    }
+    if path:
+        try:
+            raw = yaml.safe_load(path.read_text()) or {}
+            if raw:
+                data.update(raw)
+        except Exception:
+            pass
+    crypto = data.get("crypto") or default_crypto
+    commodities = data.get("commodities") or default_commodities
+    stocks = data.get("stocks") or default_stocks
+    all_rows = list(crypto) + list(commodities) + list(stocks)
+    data["leverage_map"] = {r["symbol"]: int(r.get("leverage") or 5) for r in all_rows if r.get("symbol")}
+    data["tier_map"] = {r["symbol"]: int(r.get("tier") or 3) for r in all_rows if r.get("symbol")}
+    data["symbols"] = [r["symbol"] for r in all_rows if r.get("symbol")]
+    data["crypto"] = crypto
+    data["stocks"] = stocks
+    return data
+
+
+def load_enabled_strategies() -> Set[str]:
+    default = {"SUPER_A", "ROC_RSI", "BB_VOL"}
+    path = _first_existing("active_strategy.json")
+    if not path:
+        return default
+    try:
+        data = json.loads(path.read_text())
+        enabled = data.get("enabled") or data.get("enabled_strategies")
+        if isinstance(enabled, list) and enabled:
+            return {str(x).upper() for x in enabled}
+        flags = set()
+        for k in ("SUPER_A", "ROC_RSI", "BB_VOL"):
+            if data.get(k) is True:
+                flags.add(k)
+            st = (data.get("strategies") or {}).get(k) or {}
+            if st.get("active") is True:
+                flags.add(k)
+        return flags or default
+    except Exception:
+        return default
+
+
+def parse_trailing(v) -> Optional[TrailingStop]:
+    if v is None or v == "":
+        return None
+    if isinstance(v, TrailingStop):
+        return v
+    if isinstance(v, str):
+        a, b = v.split(",")
+        return TrailingStop(activation_price=Decimal(a.strip()), trailing_delta=Decimal(b.strip()))
+    return None
+
+
+class V37ScalpMultiConfig(ControllerConfigBase):
+    controller_name: str = "v37_scalp_multi"
+    controller_type: str = "generic"
+    connector_name: str = Field(default="bitget_perpetual")
+    # Comma-separated or list — filled from universe if empty
+    trading_pairs: List[str] = Field(default_factory=list)
+    max_open_positions: int = Field(default=3, ge=1, le=10)
+    position_size_quote: Decimal = Field(default=Decimal("10"))
+    total_amount_quote: Decimal = Field(default=Decimal("30"))  # size * max slots
+    leverage_default: int = Field(default=5)
+    # JSON string or dict: {"BTC-USDT": 5, ...}
+    leverage_map: Dict[str, int] = Field(default_factory=dict)
+    position_mode: PositionMode = Field(default="ONEWAY")
+    stop_loss: Optional[Decimal] = Field(default=Decimal("0.008"))
+    take_profit: Optional[Decimal] = Field(default=Decimal("0.016"))
+    time_limit: Optional[int] = Field(default=10800)
+    trailing_stop: Optional[TrailingStop] = Field(
+        default=TrailingStop(activation_price=Decimal("0.005"), trailing_delta=Decimal("0.003"))
+    )
+    cooldown_time: int = Field(default=1500)
+    # 2/3 engines ≈ 0.667; 0.66 rejects the old solo ceiling (1/3 + 0.25 = 0.58)
+    score_threshold: float = Field(default=0.66)
+    # signal params
+    roc_period: int = 5
+    roc_min: float = 0.2
+    rsi_period: int = 14
+    rsi_oversold: float = 40.0
+    rsi_overbought: float = 60.0
+    bb_period: int = 20
+    bb_std: float = 2.0
+    vol_ratio_min: float = 1.3
+    super_a_m15_roc_period: int = 8
+    super_a_h1_roc_period: int = 5
+    super_a_min_combined_roc: float = 0.40
+
+    @field_validator("trading_pairs", mode="before")
+    @classmethod
+    def _pairs(cls, v):
+        if v is None or v == "":
+            return []
+        if isinstance(v, str):
+            return [p.strip() for p in v.split(",") if p.strip()]
+        return list(v)
+
+    @field_validator("leverage_map", mode="before")
+    @classmethod
+    def _lev(cls, v):
+        if v is None or v == "":
+            return {}
+        if isinstance(v, str):
+            return {str(k): int(val) for k, val in json.loads(v).items()}
+        return {str(k): int(val) for k, val in dict(v).items()}
 
     @field_validator("trailing_stop", mode="before")
     @classmethod
@@ -24,7 +225,7 @@
             time_limit=self.time_limit,
             trailing_stop=self.trailing_stop,
             open_order_type=OrderType.MARKET,
-            take_profit_order_type=OrderType.MARKET,
+            take_profit_order_type=OrderType.LIMIT,
             stop_loss_order_type=OrderType.MARKET,
             time_limit_order_type=OrderType.MARKET,
         )
@@ -45,7 +246,9 @@ class V37ScalpMultiController(ControllerBase):
         uni = load_universe()
         if not config.trading_pairs:
             config.trading_pairs = [
-                x["symbol"] for x in (uni.get("crypto") or []) + (uni.get("commodities") or []) + (uni.get("stocks") or [])
+                x["symbol"]
+                for x in (uni.get("crypto") or []) + (uni.get("commodities") or []) + (uni.get("stocks") or [])
+                if x.get("symbol") and x["symbol"] not in _E4_PAIRS and x["symbol"] not in _E2_BASKET
             ]
         if not config.leverage_map:
             config.leverage_map = {
@@ -196,11 +399,47 @@ class V37ScalpMultiController(ControllerBase):
     def _lev(self, pair: str) -> int:
         return int(self.config.leverage_map.get(pair) or self.config.leverage_default or 5)
 
-    def _active_pairs(self) -> Set[str]:
-        """Pairs that currently occupy a slot.
+    def _e2_claimed_pairs(self) -> Set[str]:
+        """Engine 2 REST fills that are STILL on Bitget — never occupy E1 slots."""
+        out: Set[str] = set()
+        path = next((p for p in _E2_FILL_PATHS if p.is_file()), None)
+        if path is None:
+            return out
+        try:
+            for line in path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                d = json.loads(line)
+                if not d.get("ok"):
+                    continue
+                pair = d.get("pair") or d.get("trading_pair")
+                if pair:
+                    out.add(str(pair))
+        except Exception:
+            return out
+        live: Set[str] = set()
+        try:
+            mdp = getattr(self, "market_data_provider", None)
+            connectors = getattr(mdp, "connectors", None) or {}
+            conn = connectors.get(self.config.connector_name)
+            acc = getattr(conn, "account_positions", None) or {}
+            for pos in acc.values() if hasattr(acc, "values") else []:
+                amt = float(getattr(pos, "amount", 0) or 0)
+                tp = getattr(pos, "trading_pair", None)
+                if tp and abs(amt) > 1e-12:
+                    live.add(str(tp))
+        except Exception:
+            live = set()
+        if live:
+            return out & live
+        return set()
 
-        Counts live scalp executors only. YOU leftovers and keep_position
-        holds do not occupy Engine 1 slots.
+    def _active_pairs(self) -> Set[str]:
+        """Pairs that currently occupy an Engine 1 slot.
+
+        Live scalp executors + in-universe exchange inventory (keep_position
+        leftover inventory). Engine 4 and Engine 2 pairs never occupy Engine 1 slots.
         """
         active = self.filter_executors(
             executors=self.executors_info,
@@ -213,10 +452,58 @@ class V37ScalpMultiController(ControllerBase):
                 tp = getattr(e.config, "trading_pair", None)
             if tp:
                 pairs.add(str(tp))
-
-        # YOU leftovers (HOOD etc.) and keep_position holds are NOT E1 slots.
-        # Only a live scalp executor occupies a slot.
-        pairs -= {"BTC-USDT", "ETH-USDT", "XRP-USDT", "DOGE-USDT", "SOL-USDT"}
+        held: Set[str] = set()
+        for rec in getattr(self, "positions_held", []) or []:
+            tp = getattr(rec, "trading_pair", None)
+            if tp:
+                held.add(str(tp))
+        live_ex: Set[str] = set()
+        try:
+            mdp = getattr(self, "market_data_provider", None)
+            connectors = getattr(mdp, "connectors", None) or {}
+            conn = connectors.get(self.config.connector_name)
+            acc = getattr(conn, "account_positions", None) or {}
+            for pos in acc.values() if hasattr(acc, "values") else []:
+                amt = float(getattr(pos, "amount", 0) or 0)
+                tp = getattr(pos, "trading_pair", None)
+                if tp and abs(amt) > 1e-12:
+                    live_ex.add(str(tp))
+        except Exception:
+            pass
+        try:
+            import json as _json
+            import urllib.request
+            payload = _json.dumps({
+                "account_names": ["master_account"],
+                "connector_names": [self.config.connector_name],
+            }).encode()
+            req = urllib.request.Request(
+                "http://localhost:8000/trading/positions",
+                data=payload,
+                method="POST",
+                headers={"Content-Type": "application/json", "Authorization": "Basic YWRtaW46YWRtaW4="},
+            )
+            with urllib.request.urlopen(req, timeout=4) as resp:
+                body = _json.loads(resp.read().decode())
+            for p in body.get("data") or []:
+                tp = p.get("trading_pair")
+                amt = float(p.get("amount") or 0)
+                if tp and abs(amt) > 1e-12:
+                    live_ex.add(str(tp))
+        except Exception:
+            pass
+        # Ghost keep_position rows (TSLA amount 140000 with no Bitget leg) must not eat slots.
+        if live_ex:
+            pairs |= (held & live_ex)
+            pairs |= live_ex
+        else:
+            pairs |= held
+        universe = set(self.config.trading_pairs or [])
+        if universe:
+            pairs = {p for p in pairs if p in universe}
+        pairs -= _E4_PAIRS
+        pairs -= _E2_BASKET
+        pairs -= self._e2_claimed_pairs()
         return pairs
 
     def _slots_used(self) -> int:
@@ -271,15 +558,11 @@ class V37ScalpMultiController(ControllerBase):
             else:
                 votes["ROC_RSI"] = 0
 
+        # BB_VOL is a volume FILTER on momentum engines, not a fade voter.
+        vol_ok = True
         if "BB_VOL" in enabled:
-            close = float(latest["close"])
             vr = float(latest["vol_ratio"] or 0)
-            if vr >= self.config.vol_ratio_min and close < float(latest["bb_lower"]):
-                votes["BB_VOL"] = 1
-            elif vr >= self.config.vol_ratio_min and close > float(latest["bb_upper"]):
-                votes["BB_VOL"] = -1
-            else:
-                votes["BB_VOL"] = 0
+            vol_ok = vr >= float(self.config.vol_ratio_min or 0)
 
         h = self._closed_df(h1)
         if "SUPER_A" in enabled:
@@ -300,6 +583,10 @@ class V37ScalpMultiController(ControllerBase):
                     elif roc_m < 0 and rsi > 30 and close < ema:
                         sig = -1
             votes["SUPER_A"] = sig
+
+        if not vol_ok:
+            for k in list(votes):
+                votes[k] = 0
 
         vals = [v for v in votes.values() if v != 0]
         # Two engines must agree. One vote (even a strong SUPER_A) is not a trade.
@@ -351,9 +638,20 @@ class V37ScalpMultiController(ControllerBase):
                 "leverage_map": self.config.leverage_map,
                 "active_pairs": sorted(self._active_pairs()),
             }
+            self._dump_signals()
             return
 
         active = self._active_pairs()
+        self.processed_data = {
+            "candidates": [],
+            "open_slots": max(0, self.config.max_open_positions - len(active)),
+            "enabled": sorted(enabled),
+            "universe": self.config.trading_pairs,
+            "leverage_map": self.config.leverage_map,
+            "active_pairs": sorted(active),
+            "max_open_positions": self.config.max_open_positions,
+        }
+        self._dump_signals()
         for pair in self.config.trading_pairs:
             try:
                 m15 = self.market_data_provider.get_candles_df(
@@ -394,40 +692,124 @@ class V37ScalpMultiController(ControllerBase):
             "active_pairs": sorted(active),
             "max_open_positions": self.config.max_open_positions,
         }
+        self._dump_signals()
 
     def determine_executor_actions(self) -> List[ExecutorAction]:
         actions: List[ExecutorAction] = []
         actions.extend(self.create_actions_proposal())
         return actions
 
+    def _dump_signals(self) -> None:
+        """Write bot-authoritative signals for the dashboard (cli.engine has no format_status)."""
+        try:
+            d = self.processed_data or {}
+            used = len(d.get("active_pairs") or [])
+            mx = int(d.get("max_open_positions") or getattr(self.config, "max_open_positions", 3) or 3)
+            try:
+                fs = "\n".join(self.to_format_status())
+            except Exception:
+                fs = ""
+            payload = {
+                "ts": time.time(),
+                "available": True,
+                "source": "controller",
+                "slots": {
+                    "used": used,
+                    "max": mx,
+                    "free": max(0, mx - used),
+                    "over": used > mx,
+                },
+                "enabled": list(d.get("enabled") or []),
+                "open_pairs": list(d.get("active_pairs") or []),
+                "score_threshold": float(getattr(self.config, "score_threshold", 0.66) or 0.66),
+                "candidates": list(d.get("candidates") or []),
+                "format_status": fs,
+            }
+            raw = json.dumps(payload)
+            for p in (
+                Path("/home/hummingbot/data/e1_signals.json"),
+                Path(__file__).resolve().parents[2] / "data" / "e1_signals.json",
+            ):
+                try:
+                    p.parent.mkdir(parents=True, exist_ok=True)
+                    tmp = p.with_suffix(".json.tmp")
+                    tmp.write_text(raw, encoding="utf-8")
+                    tmp.replace(p)
+                except Exception:
+                    try:
+                        p.write_text(raw, encoding="utf-8")
+                    except Exception:
+                        continue
+        except Exception:
+            return
+
+    def _barrier_for(self, pair: str) -> TripleBarrierConfig:
+        """Stocks get a wider trail so 15m crypto geometry does not scalp pennies."""
+        base = self.config.triple_barrier_config
+        if pair not in _STOCK_PAIRS:
+            return base
+        return TripleBarrierConfig(
+            stop_loss=self.config.stop_loss,
+            take_profit=self.config.take_profit,
+            time_limit=self.config.time_limit,
+            trailing_stop=TrailingStop(
+                activation_price=Decimal("0.008"),
+                trailing_delta=Decimal("0.005"),
+            ),
+            open_order_type=OrderType.MARKET,
+            take_profit_order_type=OrderType.LIMIT,
+            stop_loss_order_type=OrderType.MARKET,
+            time_limit_order_type=OrderType.MARKET,
+        )
+
     def _effective_cooldown(self, pair: str) -> float:
-        """Adaptive cooldown (P5): double the base cooldown after a STOP_LOSS on
-        this pair, so we don't revenge re-enter the same chop. Normal cooldown
-        after wins/flats. Keeps all symbols tradeable (no list kills)."""
+        """Adaptive cooldown: 25m normal, 50m after STOP_LOSS on this pair."""
         base = float(getattr(self.config, "cooldown_time", 1500) or 1500)
         if self._last_close_was_sl(pair):
             return base * 2.0
         return base
 
-    def _last_close_was_sl(self, pair: str) -> bool:
-        """True if this pair's most recent closed executor exited via STOP_LOSS."""
+    def _executor_pair(self, e) -> str:
+        tp = getattr(e, "trading_pair", None)
+        if not tp:
+            cfg = getattr(e, "config", None)
+            if cfg is not None:
+                tp = getattr(cfg, "trading_pair", None)
+                if not tp and isinstance(cfg, dict):
+                    tp = cfg.get("trading_pair")
+        return str(tp or "")
+
+    def _closed_executors_for(self, pair: str) -> list:
         try:
-            closed = self.filter_executors(
+            return list(self.filter_executors(
                 executors=self.executors_info,
                 filter_func=lambda e: (
-                    getattr(e, "trading_pair", None) == pair
+                    self._executor_pair(e) == pair
                     and not getattr(e, "is_active", True)
                 ),
-            )
-            if not closed:
-                return False
-            closed.sort(key=lambda e: float(getattr(e, "close_timestamp", 0) or 0), reverse=True)
-            cc = getattr(closed[0], "close_type", None)
-            if cc is None:
-                cc = getattr(getattr(closed[0], "config", None), "close_type", None)
-            return "STOP_LOSS" in str(getattr(cc, "name", cc))
+            ) or [])
         except Exception:
+            return []
+
+    def _last_close_ts(self, pair: str) -> float:
+        ts = 0.0
+        for e in self._closed_executors_for(pair):
+            try:
+                ts = max(ts, float(getattr(e, "close_timestamp", 0) or 0))
+            except Exception:
+                continue
+        return ts
+
+    def _last_close_was_sl(self, pair: str) -> bool:
+        """True if this pair's most recent closed executor exited via STOP_LOSS."""
+        closed = self._closed_executors_for(pair)
+        if not closed:
             return False
+        closed.sort(key=lambda e: float(getattr(e, "close_timestamp", 0) or 0), reverse=True)
+        cc = getattr(closed[0], "close_type", None)
+        if cc is None:
+            cc = getattr(getattr(closed[0], "config", None), "close_type", None)
+        return "STOP_LOSS" in str(getattr(cc, "name", cc))
 
     def create_actions_proposal(self) -> List[ExecutorAction]:
         out: List[ExecutorAction] = []
@@ -439,14 +821,16 @@ class V37ScalpMultiController(ControllerBase):
             return out
         now = self.market_data_provider.time()
         opened = 0
+        e2_block = self._e2_claimed_pairs()
         for c in candidates:
             if opened >= free:
                 break
             pair = c["symbol"]
-            if pair in active or not c.get("ready"):
+            if pair in active or pair in e2_block or pair in _E4_PAIRS or pair in _E2_BASKET or not c.get("ready"):
                 continue
-            # adaptive cooldown per pair
-            if now - self._last_entry_ts.get(pair, 0) < self._effective_cooldown(pair):
+            # Cooldown from last CLOSE (or last entry if never closed). SL → 50m.
+            gate_ts = max(float(self._last_entry_ts.get(pair, 0) or 0), self._last_close_ts(pair))
+            if now - gate_ts < self._effective_cooldown(pair):
                 continue
             try:
                 price = self.market_data_provider.get_price_by_type(
@@ -501,7 +885,7 @@ class V37ScalpMultiController(ControllerBase):
                         side=side,
                         entry_price=price,
                         amount=amount,
-                        triple_barrier_config=self.config.triple_barrier_config,
+                        triple_barrier_config=self._barrier_for(pair),
                         leverage=lev,
                         level_id=level_id,
                     ),

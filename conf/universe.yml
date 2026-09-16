@@ -13,32 +13,28 @@ position_size_quote: 10  # MARGIN per trade in USDT (notional = this × leverage
 connector_name: bitget_perpetual
 position_mode: ONEWAY
 
-# Exit geometry — SL held 0.8%; trail widened so 1.6% TP can actually hit
-# (0.8/0.5 was banking +$0.31 vs SL −$0.58). Arm 1.2% / delta 0.8%.
+# Exit geometry — SL 0.8% / TP 1.6% held. Trail arms earlier so greens lock
+# instead of sitting until SL (1.2/0.8 never armed on typical +0.3–0.8% pops).
+# Arm 0.5% / delta 0.3% (delta MUST be < arm or stop sits below entry).
 stop_loss: 0.008
 take_profit: 0.016
 time_limit: 10800
-trailing_stop: "0.012,0.008"
+trailing_stop: "0.005,0.003"
 cooldown_time: 1500
 
 # 0.66 = two engines (2/3). Solo SUPER_A ceiling was 0.58 — that is not an ensemble.
 score_threshold: 0.66
 
 crypto:
-  - {symbol: BTC-USDT,  leverage: 15, tier: 1}
-  - {symbol: ETH-USDT,  leverage: 15, tier: 1}
+  # Engine 4 owns BTC+ETH at 100×.
+  # Engine 2 20× basket (not E1): XAU, CL, DOGE, NEAR, LTC.
   - {symbol: SOL-USDT,  leverage: 10, tier: 2}
-  - {symbol: XRP-USDT,  leverage: 10, tier: 2}
-  - {symbol: SUI-USDT,  leverage: 5,  tier: 3}
-  - {symbol: DOGE-USDT, leverage: 5,  tier: 3}
-  - {symbol: LINK-USDT, leverage: 5,  tier: 2}
-  - {symbol: DOT-USDT,  leverage: 5,  tier: 2}
-  - {symbol: ARB-USDT,  leverage: 5,  tier: 3}
-  - {symbol: FET-USDT,  leverage: 5,  tier: 3}
+  - {symbol: XRP-USDT,  leverage: 10, tier: 1}
+  - {symbol: BNB-USDT,  leverage: 5,  tier: 2}
+  - {symbol: ADA-USDT,  leverage: 5,  tier: 2}
+  - {symbol: AVAX-USDT, leverage: 5,  tier: 2}
 
-commodities:
-  - {symbol: XAU-USDT,  leverage: 5,  tier: 2}
-  - {symbol: CL-USDT,   leverage: 5,  tier: 2}  # WTI crude oil (replaces XAG)
+commodities: []
 
 stocks:
   - {symbol: TSLA-USDT,  leverage: 5, tier: 2}

@@ -25,7 +25,7 @@ position_mode: ONEWAY
 stop_loss: 0.008
 take_profit: 0.016
 time_limit: 10800
-trailing_stop: "0.012,0.008"
+trailing_stop: "0.005,0.003"
 cooldown_time: 1500
 score_threshold: 0.66
 
