@@ -1,0 +1,55 @@
+# Shared trading universe for Hummingbot multi-pair v3.7 SCALP
+# Read by: dashboard server + live controller
+# leverage = Bitget USDT-M leverage used on entry
+#
+# Session 9 tuning (loss review):
+#   - max slots 3 → 2 (lower fee surface)
+#   - trail wider, TP wider, cooldown longer
+#   - score_threshold 0.55 (require stronger agreement)
+#   - drop XAG (chop), add CL oil perp
+
+max_open_positions: 3
+position_size_quote: 10  # MARGIN per trade in USDT (notional = this × leverage)
+connector_name: bitget_perpetual
+position_mode: ONEWAY
+
+# Exit geometry — SL held 0.8%; trail widened so 1.6% TP can actually hit
+# (0.8/0.5 was banking +$0.31 vs SL −$0.58). Arm 1.2% / delta 0.8%.
+stop_loss: 0.008
+take_profit: 0.016
+time_limit: 10800
+trailing_stop: "0.012,0.008"
+cooldown_time: 1500
+
+# 0.66 = two engines (2/3). Solo SUPER_A ceiling was 0.58 — that is not an ensemble.
+score_threshold: 0.66
+
+crypto:
+  - {symbol: BTC-USDT,  leverage: 15, tier: 1}
+  - {symbol: ETH-USDT,  leverage: 15, tier: 1}
+  - {symbol: SOL-USDT,  leverage: 10, tier: 2}
+  - {symbol: XRP-USDT,  leverage: 10, tier: 2}
+  - {symbol: SUI-USDT,  leverage: 5,  tier: 3}
+  - {symbol: DOGE-USDT, leverage: 5,  tier: 3}
+  - {symbol: LINK-USDT, leverage: 5,  tier: 2}
+  - {symbol: DOT-USDT,  leverage: 5,  tier: 2}
+  - {symbol: ARB-USDT,  leverage: 5,  tier: 3}
+  - {symbol: FET-USDT,  leverage: 5,  tier: 3}
+
+commodities:
+  - {symbol: XAU-USDT,  leverage: 5,  tier: 2}
+  - {symbol: CL-USDT,   leverage: 5,  tier: 2}  # WTI crude oil (replaces XAG)
+
+stocks:
+  - {symbol: TSLA-USDT,  leverage: 5, tier: 2}
+  - {symbol: NVDA-USDT,  leverage: 5, tier: 2}
+  - {symbol: AAPL-USDT,  leverage: 5, tier: 2}
+  - {symbol: AMZN-USDT,  leverage: 5, tier: 2}
+  - {symbol: META-USDT,  leverage: 5, tier: 2}
+  - {symbol: MSFT-USDT,  leverage: 5, tier: 2}
+  - {symbol: GOOGL-USDT, leverage: 5, tier: 2}
+  - {symbol: COIN-USDT,  leverage: 5, tier: 3}
+  - {symbol: MSTR-USDT,  leverage: 5, tier: 3}
+  - {symbol: HOOD-USDT,  leverage: 5, tier: 3}
+  - {symbol: PLTR-USDT,  leverage: 5, tier: 3}
+  - {symbol: AMD-USDT,   leverage: 5, tier: 3}

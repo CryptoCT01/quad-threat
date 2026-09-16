@@ -1,0 +1,30 @@
+# Engine 2 only — independent Condor LLM breakout loop.
+# Engine 1 remains v37_scalp_multi and owns its separate 3 controller slots.
+# Engine 4 remains pmm_simple on BTC/ETH.
+server_name: local
+agent_key: openrouter:YOUR_MODEL_HERE
+model_base_url: ''
+total_amount_quote: 30.0
+frequency_sec: 300
+trading_context: >-
+  LIVE Bitget USDT-M perpetuals on server local. You are Engine 2, a breakout
+  trader and risk overlay. Run every 300 seconds. You may open and manage up to
+  3 Engine-2 positions. OPEN only the 20x basket: XAU-USDT, CL-USDT, DOGE-USDT,
+  NEAR-USDT, APT-USDT. Fill path rejects everything else (stocks, SOL, XRP,
+  BTC, ETH). Engine 1, Engine 2, and Engine 4 remain separate. manage_executors
+  only. $10 margin. Exchange banks Engine 2 at 0.4% TP / 0.5% SL
+  (stop_loss 0.005). Do not CLOSE E1 on $0.80 — E1 already has SL/TP/trail.
+  Overlay flatten E1/E4 only on invalid thesis or 3% DD. Same breakout playbook
+  but LOOSE: open on 2+ aligned factors (impulse / 1h direction / expanding
+  range). Do not wait for 4h close + follow-through + HTF + 1:1.5. Prefer a
+  real attempt over endless HOLD when Engine-2 is 0/3. No MACD+ fade. E1 3/3
+  does not block you. CORE DATA 0 executors is often a lie.
+execution_mode: loop
+max_ticks: 0
+bot_name: ''
+bot_mode: auto
+risk_limits:
+  max_position_size_quote: 30.0
+  max_open_executors: 3
+  max_drawdown_pct: 3.0
+  shutdown_drawdown_pct: 5.0

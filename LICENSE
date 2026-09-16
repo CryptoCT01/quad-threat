@@ -1,0 +1,35 @@
+MIT License
+
+Copyright (c) 2026 Crypto T (@CryptoCTO1)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+Upstream notice
+---------------
+This repository packages custom controllers, configs, a Condor agent pack, and a
+Cup dashboard that integrate with upstream projects. Their licenses still apply
+to their own code:
+
+- Hummingbot — https://github.com/hummingbot/hummingbot (Apache-2.0)
+- Condor — https://github.com/hummingbot/condor (see upstream LICENSE)
+
+Do not treat this pack as a full fork of either project. Install upstream
+Hummingbot and Condor separately, then copy the files from this repo into place.

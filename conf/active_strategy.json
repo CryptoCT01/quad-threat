@@ -1,0 +1,27 @@
+{
+  "enabled": [
+    "SUPER_A",
+    "ROC_RSI",
+    "BB_VOL"
+  ],
+  "enabled_strategies": [
+    "SUPER_A",
+    "ROC_RSI",
+    "BB_VOL"
+  ],
+  "strategies": {
+    "SUPER_A": {
+      "active": true
+    },
+    "ROC_RSI": {
+      "active": true
+    },
+    "BB_VOL": {
+      "active": true
+    }
+  },
+  "updated_at": 1786433391.901428,
+  "SUPER_A": true,
+  "ROC_RSI": true,
+  "BB_VOL": true
+}

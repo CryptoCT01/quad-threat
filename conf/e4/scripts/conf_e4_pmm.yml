@@ -1,0 +1,8 @@
+script_file_name: v2_with_controllers.py
+controllers_config:
+  - conf_e4_pmm_btc.yml
+  - conf_e4_pmm_eth.yml
+  - conf_e4_pmm_xrp.yml
+  - conf_e4_pmm_doge.yml
+max_global_drawdown_quote: 16
+max_controller_drawdown_quote: 8

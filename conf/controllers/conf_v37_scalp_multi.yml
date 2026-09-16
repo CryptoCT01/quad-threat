@@ -1,0 +1,39 @@
+# conf_v37_scalp_multi.yml — Multi-pair v3.7 SCALP (crypto + commodities + stock perps)
+# Max 2 concurrent positions · best opportunity ranking · per-symbol leverage
+#
+# Start:
+#   hbot import conf_v37_scalp_multi.yml --controller
+#   hbot start --json --replace
+#
+# Universe + leverage live in conf/universe.yml
+# Strategy toggles live in conf/active_strategy.json (dashboard)
+
+id: v37_scalp_multi
+controller_name: v37_scalp_multi
+controller_type: generic
+connector_name: bitget_perpetual
+
+# leave trading_pairs empty → load full universe.yml
+trading_pairs: []
+max_open_positions: 3
+position_size_quote: 10
+total_amount_quote: 30
+leverage_default: 5
+leverage_map: {}
+position_mode: ONEWAY
+
+stop_loss: 0.008
+take_profit: 0.016
+time_limit: 10800
+trailing_stop: "0.012,0.008"
+cooldown_time: 1500
+score_threshold: 0.66
+
+roc_period: 5
+roc_min: 0.2
+rsi_period: 14
+rsi_oversold: 40
+rsi_overbought: 60
+bb_period: 20
+bb_std: 2.0
+vol_ratio_min: 1.3
