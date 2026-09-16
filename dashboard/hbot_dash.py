@@ -3340,7 +3340,7 @@ def call_xiaomi_llm(messages: List[Dict[str, str]], max_tokens: int = 1024) -> s
 #  Slots: strategy 3 + agent 3 = 6 total. $10 min margin. Free leverage (capped).
 #  NO dry-run — all decisions place real Bitget orders.
 # ══════════════════════════════════════════════════════════════════
-_AGENT_MODEL = os.environ.get("AGENT_MODEL", "deepseek/deepseek-v4.1-flash")
+_AGENT_MODEL = os.environ.get("AGENT_MODEL", "YOUR_MODEL_HERE")
 _AGENT_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 if not _AGENT_API_KEY:
     # fallback: read from condor/.env (never logged)
