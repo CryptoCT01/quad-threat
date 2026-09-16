@@ -11,9 +11,15 @@ Public snapshot for Michael / Bitget early-October sandbox. Clone this pack, ins
 | **Engine 4 (Maker)** | Hummingbot `pmm_simple` BTC+ETH two-sided quotes |
 | **Dashboard** | Custom Cup UI (`hbot_dash.py` + `hbot-dashboard.html` + `hbot_server.py`) on `:8770` |
 
-### No Engine 3 controller
+### Engine 3 — Engine Free (manual / personal)
 
-The live desk has **three** trading engines. In code and on the dashboard the maker is **Engine 4 (E4)**. People sometimes say “engine 3” casually meaning “the third runnable after E1+E2.” **There is no separate Engine 3 controller file.** Title the four Quad Threat pieces as **Engine 1 / Engine 2 / Engine 4 (Maker) / Dashboard**.
+**Engine 3 is not an automated strategy.** There is no Hummingbot controller or Condor agent for it.
+
+It is **Engine Free**: optional **manual trading** on the same Bitget account. After (or outside) the competition, the end user can place personal trades by hand. Those fills still land on the shared account and roll into **overall performance / journal / volume** on the Cup dashboard.
+
+- **Not required for the competition sandbox** — E1 + E2 + E4 are enough.
+- Shipped only as a **precaution / desk flexibility** so humans can trade leftovers without a fifth bot.
+- Pair ownership still matters: avoid fighting E1/E2/E4 on the same symbols while those engines are live.
 
 ```
 Engine 1 ──► directional P&L (scalp slots)
@@ -25,6 +31,13 @@ Dashboard ─► watches all three, start/stop, journal
 See `quad-threat-flowchart.png` if present.
 
 ---
+
+
+## Dashboard
+
+![Quad Threat Cup dashboard](dashboard.png)
+
+Live Cup UI on `:8770` — engines, open positions, performance, and journal in one view.
 
 ## What Quad Threat is
 
@@ -56,7 +69,8 @@ See `quad-threat-flowchart.png` if present.
 1. **E1** opens when ≥2 of 3 signal engines agree above `score_threshold` and a scalp slot is free.
 2. **E2** ticks every `frequency_sec` (live: 300s). Opens only via Condor `manage_executors` on the allowed basket. May flatten E1/E4 when thesis dies or daily DD hits 3% — not for “take $0.80 profit” on E1 (E1 already has barriers).
 3. **E4** continuously quotes; fills become inventory worked with limit TP + stop.
-4. **Dashboard** is observe + orchestration UI. It does not replace the engines.
+4. **Engine 3 (Engine Free)** is optional manual trading. Personal fills on this account still count toward overall performance; it is not needed to run the competition stack.
+5. **Dashboard** is observe + orchestration UI. It does not replace the engines.
 
 ---
 
