@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from hummingbot.core.data_type.common import OrderType, TradeType
 from hummingbot.data_feed.candles_feed.data_types import CandlesConfig
@@ -11,6 +11,99 @@ from hummingbot.strategy_v2.executors.position_executor.data_types import Positi
 from hummingbot.strategy_v2.models.base import RunnableStatus
 from hummingbot.strategy_v2.models.executor_actions import ExecutorAction, StopExecutorAction
 from hummingbot.strategy_v2.models.executors import CloseType
+
+
+# ---------------------------------------------------------------------------
+# Venue-safe sizing (finals fix, blockers 3 + 4).
+#
+# Bitget perps: min_order_size = minTradeNum, min_base_amount_increment =
+# sizeMultiplier, min_price_increment = 10^-pricePlace, and the USDT minimum
+# lives in min_order_value (minTradeUSDT) - min_notional_size is left at 0 by
+# the bitget_perpetual connector. The connector quantizes amounts DOWN before
+# its own min checks, so an order sized exactly at the minimum (or a hair
+# above) is rejected client-side and the PositionExecutor dies without ever
+# reaching the exchange. We therefore quantize first, then check the ROUNDED
+# order against both minimums (with a safety margin) and round UP by whole
+# increments when it falls short. If the configured budget is below the venue
+# minimum we refuse with a clear error instead of placing a doomed order.
+# Kept inline (no shared module) because manage_controllers uploads one file.
+# ---------------------------------------------------------------------------
+VENUE_MIN_SAFETY = Decimal("0.05")  # size >= 105% of the venue minimum notional
+
+
+class VenueMinimumError(ValueError):
+    """Configured budget cannot clear the venue minimum for this pair."""
+
+
+def _rule_dec(rule: Any, name: str) -> Decimal:
+    if rule is None:
+        return Decimal("0")
+    raw = rule.get(name) if isinstance(rule, dict) else getattr(rule, name, 0)
+    try:
+        v = Decimal(str(raw or 0))
+    except Exception:
+        return Decimal("0")
+    return v if v.is_finite() and v > 0 else Decimal("0")
+
+
+def venue_min_notional(rule: Any) -> Decimal:
+    """Largest quote minimum the venue states (min_notional_size / min_order_value)."""
+    return max(_rule_dec(rule, "min_notional_size"), _rule_dec(rule, "min_order_value"))
+
+
+def quantize_price(price: Decimal, rule: Any, side: Optional[TradeType] = None) -> Decimal:
+    """Snap price to min_price_increment. Buys round down, sells round up (stay maker side)."""
+    price = Decimal(str(price))
+    step = _rule_dec(rule, "min_price_increment") if rule is not None else Decimal("0")
+    if step <= 0 or step < Decimal("1e-12"):
+        return price
+    rounding = "ROUND_UP" if side == TradeType.SELL else "ROUND_DOWN"
+    return (price / step).to_integral_value(rounding=rounding) * step
+
+
+def venue_safe_amount(
+    amount: Decimal,
+    price: Decimal,
+    rule: Any,
+    budget_quote: Optional[Decimal] = None,
+    safety: Decimal = VENUE_MIN_SAFETY,
+) -> Tuple[Decimal, bool]:
+    """Quantize ``amount`` to the increment, then make the ROUNDED order clear the venue minimums.
+
+    Returns ``(amount, bumped)``. ``bumped`` is True when the amount was rounded up
+    to clear min_order_size / min notional (+ ``safety``). Raises VenueMinimumError when
+    ``budget_quote`` (the notional the config meant to spend) is below the venue minimum,
+    so the caller can refuse loudly instead of letting the executor die at start.
+    """
+    amount = Decimal(str(amount))
+    price = Decimal(str(price))
+    if rule is None or price <= 0 or amount <= 0:
+        return amount, False
+    step = _rule_dec(rule, "min_base_amount_increment")
+    if step < Decimal("1e-12"):
+        step = Decimal("0")
+    q = (amount / step).to_integral_value(rounding="ROUND_DOWN") * step if step > 0 else amount
+    min_size = _rule_dec(rule, "min_order_size")
+    min_notional = venue_min_notional(rule)
+    venue_floor_quote = max(min_notional, min_size * price)
+    if budget_quote is not None and venue_floor_quote > 0 and Decimal(str(budget_quote)) < venue_floor_quote:
+        raise VenueMinimumError(
+            f"budget {Decimal(str(budget_quote)):.4f} quote is below the venue minimum "
+            f"{venue_floor_quote:.4f} quote (min_notional={min_notional}, min_order_size={min_size}, "
+            f"price={price}); raise the size or drop this pair"
+        )
+    need = min_size
+    if min_notional > 0:
+        need = max(need, (min_notional * (Decimal("1") + safety)) / price)
+    if q >= need and q > 0:
+        return q, False
+    if step > 0:
+        q = (need / step).to_integral_value(rounding="ROUND_UP") * step
+        if q <= 0:
+            q = step
+    else:
+        q = need
+    return q, True
 
 
 class PMMSimpleConfig(MarketMakingControllerConfigBase):
@@ -39,8 +132,54 @@ class PMMSimpleController(MarketMakingControllerBase):
         self.config = config
         self._lev_set = False
 
+    def _trading_rule(self):
+        try:
+            return self.market_data_provider.get_trading_rules(
+                self.config.connector_name, self.config.trading_pair
+            )
+        except Exception:
+            return None
+
+    def _warn_once(self, key: str, msg: str) -> None:
+        seen = getattr(self, "_warned", None)
+        if seen is None:
+            seen = self._warned = set()
+        if key in seen:
+            return
+        seen.add(key)
+        try:
+            self.logger().error(msg)
+        except Exception:
+            pass
+
     def get_executor_config(self, level_id: str, price: Decimal, amount: Decimal):
         trade_type = self.get_trade_type_from_level_id(level_id)
+        # Finals fix (blockers 3+4): snap price to tick, quantize amount to the
+        # increment FIRST, then make the rounded quote clear the venue minimum
+        # (+5%), rounding up. A level budget below the venue minimum is refused
+        # with a clear error (returns None -> base skips) instead of creating an
+        # executor that the connector rejects and that dies with zero orders.
+        rule = self._trading_rule()
+        level_budget_quote = Decimal(str(amount)) * Decimal(str(price))
+        price = quantize_price(price, rule, trade_type)
+        try:
+            amount, bumped = venue_safe_amount(amount, price, rule, budget_quote=level_budget_quote)
+        except VenueMinimumError as err:
+            self._warn_once(
+                f"min:{level_id}",
+                f"{self.config.id} {self.config.trading_pair} {level_id}: not quoting - {err}. "
+                f"Raise total_amount_quote (level budget = total_amount_quote x level pct).",
+            )
+            return None
+        if amount <= 0 or price <= 0:
+            self._warn_once(f"zero:{level_id}", f"{self.config.id} {level_id}: amount/price quantized to 0")
+            return None
+        if bumped:
+            self._warn_once(
+                f"bump:{level_id}",
+                f"{self.config.id} {level_id}: amount rounded up to {amount} to clear venue minimum "
+                f"(min_notional={venue_min_notional(rule)}, min_size={_rule_dec(rule, 'min_order_size')})",
+            )
         tbc = self.config.triple_barrier_config
         inv = self._net_inventory_quote()
         band = self._inventory_deadband_quote()
