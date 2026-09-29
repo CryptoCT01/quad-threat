@@ -48,6 +48,100 @@ _E2_FILL_PATHS = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Venue-safe sizing (finals fix, blockers 3 + 4).
+#
+# Bitget perps: min_order_size = minTradeNum, min_base_amount_increment =
+# sizeMultiplier, min_price_increment = 10^-pricePlace, and the USDT minimum
+# lives in min_order_value (minTradeUSDT) - min_notional_size is left at 0 by
+# the bitget_perpetual connector. The connector quantizes amounts DOWN before
+# its own min checks, so an order sized exactly at the minimum (or a hair
+# above) is rejected client-side and the PositionExecutor dies without ever
+# reaching the exchange. We therefore quantize first, then check the ROUNDED
+# order against both minimums (with a safety margin) and round UP by whole
+# increments when it falls short. If the configured budget is below the venue
+# minimum we refuse with a clear error instead of placing a doomed order.
+# Kept inline (no shared module) because manage_controllers uploads one file.
+# ---------------------------------------------------------------------------
+VENUE_MIN_SAFETY = Decimal("0.05")  # size >= 105% of the venue minimum notional
+ENTRY_RETRY_SEC = 300.0  # retry an entry whose executor never got an order filled
+
+
+class VenueMinimumError(ValueError):
+    """Configured budget cannot clear the venue minimum for this pair."""
+
+
+def _rule_dec(rule: Any, name: str) -> Decimal:
+    if rule is None:
+        return Decimal("0")
+    raw = rule.get(name) if isinstance(rule, dict) else getattr(rule, name, 0)
+    try:
+        v = Decimal(str(raw or 0))
+    except Exception:
+        return Decimal("0")
+    return v if v.is_finite() and v > 0 else Decimal("0")
+
+
+def venue_min_notional(rule: Any) -> Decimal:
+    """Largest quote minimum the venue states (min_notional_size / min_order_value)."""
+    return max(_rule_dec(rule, "min_notional_size"), _rule_dec(rule, "min_order_value"))
+
+
+def quantize_price(price: Decimal, rule: Any, side: Optional[TradeType] = None) -> Decimal:
+    """Snap price to min_price_increment. Buys round down, sells round up (stay maker side)."""
+    price = Decimal(str(price))
+    step = _rule_dec(rule, "min_price_increment") if rule is not None else Decimal("0")
+    if step <= 0 or step < Decimal("1e-12"):
+        return price
+    rounding = "ROUND_UP" if side == TradeType.SELL else "ROUND_DOWN"
+    return (price / step).to_integral_value(rounding=rounding) * step
+
+
+def venue_safe_amount(
+    amount: Decimal,
+    price: Decimal,
+    rule: Any,
+    budget_quote: Optional[Decimal] = None,
+    safety: Decimal = VENUE_MIN_SAFETY,
+) -> Tuple[Decimal, bool]:
+    """Quantize ``amount`` to the increment, then make the ROUNDED order clear the venue minimums.
+
+    Returns ``(amount, bumped)``. ``bumped`` is True when the amount was rounded up
+    to clear min_order_size / min notional (+ ``safety``). Raises VenueMinimumError when
+    ``budget_quote`` (the notional the config meant to spend) is below the venue minimum,
+    so the caller can refuse loudly instead of letting the executor die at start.
+    """
+    amount = Decimal(str(amount))
+    price = Decimal(str(price))
+    if rule is None or price <= 0 or amount <= 0:
+        return amount, False
+    step = _rule_dec(rule, "min_base_amount_increment")
+    if step < Decimal("1e-12"):
+        step = Decimal("0")
+    q = (amount / step).to_integral_value(rounding="ROUND_DOWN") * step if step > 0 else amount
+    min_size = _rule_dec(rule, "min_order_size")
+    min_notional = venue_min_notional(rule)
+    venue_floor_quote = max(min_notional, min_size * price)
+    if budget_quote is not None and venue_floor_quote > 0 and Decimal(str(budget_quote)) < venue_floor_quote:
+        raise VenueMinimumError(
+            f"budget {Decimal(str(budget_quote)):.4f} quote is below the venue minimum "
+            f"{venue_floor_quote:.4f} quote (min_notional={min_notional}, min_order_size={min_size}, "
+            f"price={price}); raise the size or drop this pair"
+        )
+    need = min_size
+    if min_notional > 0:
+        need = max(need, (min_notional * (Decimal("1") + safety)) / price)
+    if q >= need and q > 0:
+        return q, False
+    if step > 0:
+        q = (need / step).to_integral_value(rounding="ROUND_UP") * step
+        if q <= 0:
+            q = step
+    else:
+        q = need
+    return q, True
+
+
 def _first_existing(*rels: str) -> Optional[Path]:
     for root in _CONF_ROOTS:
         for rel in rels:
@@ -398,6 +492,13 @@ class V37ScalpMultiController(ControllerBase):
 
     def _lev(self, pair: str) -> int:
         return int(self.config.leverage_map.get(pair) or self.config.leverage_default or 5)
+
+    def _trading_rule(self, pair: str):
+        """Connector trading rule for ``pair`` (None until the connector has loaded rules)."""
+        try:
+            return self.market_data_provider.get_trading_rules(self.config.connector_name, pair)
+        except Exception:
+            return None
 
     def _e2_claimed_pairs(self) -> Set[str]:
         """Engine 2 REST fills that are STILL on Bitget — never occupy E1 slots."""
@@ -763,11 +864,45 @@ class V37ScalpMultiController(ControllerBase):
         )
 
     def _effective_cooldown(self, pair: str) -> float:
-        """Adaptive cooldown: 25m normal, 50m after STOP_LOSS on this pair."""
+        """Adaptive cooldown: 25m normal, 50m after STOP_LOSS on this pair.
+
+        Finals fix (blocker 2): an entry that never got an order onto the exchange
+        (executor closed FAILED / INSUFFICIENT_BALANCE with zero fill) is logged and
+        retried after ENTRY_RETRY_SEC instead of silently sitting out a full cooldown.
+        """
         base = float(getattr(self.config, "cooldown_time", 1500) or 1500)
+        if self._last_entry_never_filled(pair):
+            return min(base, ENTRY_RETRY_SEC)
         if self._last_close_was_sl(pair):
             return base * 2.0
         return base
+
+    def _last_entry_never_filled(self, pair: str) -> bool:
+        closed = self._closed_executors_for(pair)
+        if not closed:
+            return False
+        closed.sort(key=lambda e: float(getattr(e, "close_timestamp", 0) or 0), reverse=True)
+        last = closed[0]
+        cc = str(getattr(getattr(last, "close_type", None), "name", getattr(last, "close_type", "")))
+        try:
+            filled = Decimal(str(getattr(last, "filled_amount_quote", 0) or 0))
+        except Exception:
+            filled = Decimal("0")
+        if cc not in ("FAILED", "INSUFFICIENT_BALANCE") or filled > 0:
+            return False
+        eid = str(getattr(last, "id", "") or "")
+        if not hasattr(self, "_reported_failed_entries"):
+            self._reported_failed_entries = set()
+        if eid not in self._reported_failed_entries:
+            self._reported_failed_entries.add(eid)
+            try:
+                self.logger().error(
+                    f"ENTRY {pair} executor {eid} closed {cc} with no fill - no order reached "
+                    f"the exchange; retrying in {ENTRY_RETRY_SEC:.0f}s"
+                )
+            except Exception:
+                pass
+        return True
 
     def _executor_pair(self, e) -> str:
         tp = getattr(e, "trading_pair", None)
@@ -848,11 +983,33 @@ class V37ScalpMultiController(ControllerBase):
                         pass
                     continue
                 # position_size_quote = MARGIN per trade ($10). notional = margin × lev
-                amount = self._position_amount(pair, price)
+                raw_amount = self._position_amount(pair, price)
+                # Finals fix (blockers 3+4): quantize to the venue increment FIRST, then make
+                # the rounded order clear min_order_size / min notional (+5%), rounding UP.
+                # A budget below the venue minimum is refused loudly instead of letting the
+                # executor die at start (INSUFFICIENT_BALANCE / FAILED, zero orders).
+                rule = self._trading_rule(pair)
+                budget_quote = Decimal(str(self.config.position_size_quote)) * Decimal(str(lev))
+                try:
+                    amount, bumped = venue_safe_amount(raw_amount, price, rule, budget_quote=budget_quote)
+                except VenueMinimumError as err:
+                    self.logger().warning(f"Skip {pair}: {err}")
+                    continue
+                if amount <= 0:
+                    self.logger().warning(f"Skip {pair}: amount quantized to 0 (raw={raw_amount} px={price})")
+                    continue
                 # Safety: reject if computed notional would need > $10.50 margin at this lev
                 notional = amount * Decimal(str(price))
                 margin_est = notional / Decimal(str(lev)) if lev else notional
                 max_margin = Decimal(str(self.config.position_size_quote)) * Decimal("1.05")
+                if bumped:
+                    # Rounding up to clear the venue minimum costs at most one increment.
+                    step = _rule_dec(rule, "min_base_amount_increment")
+                    max_margin += (step * Decimal(str(price))) / Decimal(str(lev or 1))
+                    self.logger().info(
+                        f"{pair}: amount {raw_amount} -> {amount} to clear venue minimum "
+                        f"(min_notional={venue_min_notional(rule)} min_size={_rule_dec(rule, 'min_order_size')})"
+                    )
                 if margin_est > max_margin:
                     try:
                         self.logger().warning(
@@ -893,7 +1050,13 @@ class V37ScalpMultiController(ControllerBase):
                 self._last_entry_ts[pair] = now
                 active.add(pair)
                 opened += 1
-            except Exception:
+            except Exception as err:
+                # Finals fix (blocker 2): never swallow an entry failure silently - a bad
+                # config/validation error here used to mean "no order, no log, forever".
+                try:
+                    self.logger().error(f"ENTRY {pair} not submitted: {err!r}", exc_info=True)
+                except Exception:
+                    pass
                 continue
         return out
 
