@@ -13,7 +13,7 @@ max_ticks: 0
 bot_name: ''
 bot_mode: auto
 risk_limits:
-  max_position_size_quote: 0.0
+  max_position_size_quote: 80.0
   max_open_executors: 0
   max_drawdown_pct: 3.0
   shutdown_drawdown_pct: 5.0
