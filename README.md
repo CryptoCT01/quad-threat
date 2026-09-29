@@ -67,7 +67,7 @@ Live Cup UI on `:8770` — engines, open positions, performance, and journal in 
 ### Who opens / closes
 
 1. **E1** opens when ≥2 of 3 signal engines agree above `score_threshold` and a scalp slot is free.
-2. **E2** ticks every `frequency_sec` (live: 300s). Opens only via Condor `manage_executors` on the allowed basket. May flatten E1/E4 when thesis dies or daily DD hits 3% — not for “take $0.80 profit” on E1 (E1 already has barriers).
+2. **E2** ticks every `frequency_sec` (live: 300s). Opens only via Condor `create_position_executor` (sized by the `e2_order_sizer` routine) on the allowed basket. May flatten E1/E4 when thesis dies or daily DD hits 3% — not for “take $0.80 profit” on E1 (E1 already has barriers).
 3. **E4** continuously quotes; fills become inventory worked with limit TP + stop.
 4. **Engine 3 (Engine Free)** is optional manual trading. Personal fills on this account still count toward overall performance; it is not needed to run the competition stack.
 5. **Dashboard** is observe + orchestration UI. It does not replace the engines.
@@ -91,7 +91,7 @@ Install into a Hummingbot tree under `controllers/generic/` and matching `conf/`
 
 - Pack: `condor-agent/v37_risk_manager/`
   - `AGENT.md`
-  - `strategies/disciplined_perps_strategy/{strategy.md,config.yml,learnings.md}`
+  - `loops/disciplined_perps_strategy/{loop.md,config.yml,learnings.md}`
   - `routines/market_analysis.py` + `routines/__init__.py`
 - Optional MCP tool: `condor-mcp/executors.py`
 - LLM: set `agent_key: openrouter:YOUR_MODEL_HERE`

@@ -1,6 +1,7 @@
 # Learnings
 
 ## Active Insights
+- [2026-09-29] SUPERSEDES the ratchet/manage_executors notes below: current Condor removed `manage_executors` (and the local `modify_tpsl` patch). Size with the `e2_order_sizer` routine, open with `create_position_executor`, close with `stop_executor`. A create with no executor_id = nothing opened.
 - [2026-09-03] RATCHET TOOL IS LIVE. Call `manage_executors(action='modify_tpsl', trading_pair='XAU-USDT', executor_config={'lock_pct': 0.002})` (BE+0.2%) or `lock_pct: 0.004` (+0.4%). There is **no** tool named `modify-tpsl-order`. Mechanical 90s `ensure_tpsl` also ratchets those rungs if you forget. Never loosen. Leave LIMIT TP.
 - Live basket **only** 20×: **XAU-USDT, CL-USDT, DOGE-USDT, NEAR-USDT, LTC-USDT**. Pass `controller_id` on create. Fill path rejects everything else.
 - LINK, SUI, and APT are not in the live basket. Do not OPEN them.

@@ -31,7 +31,7 @@ Drawdown on deploy: `max_global_drawdown_quote=80`, `max_controller_drawdown_quo
 3. If `quad-e4` is missing: `manage_bots(action="deploy", bot_name="quad-e4", controllers_config=["conf_e4_pmm_btc.yml", "conf_e4_pmm_eth.yml"], max_global_drawdown_quote=80, max_controller_drawdown_quote=40)`.
 4. If a bot is present but a controller is stopped: `start_controllers` for that name only.
 5. **Never** `stop_bot` unless the human asked.
-6. **Never** `manage_executors` / `place_order`. Engine 2 owns the LLM book.
+6. **Never** `create_*_executor` / `stop_executor` / `place_order`. Engine 2 owns the LLM book.
 7. Journal HOLD if both bots are up.
 
 Engine 2 (`v37_risk_manager`) is a **separate** Condor strategy. Do not start or stop it from here.
