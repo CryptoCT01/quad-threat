@@ -1,12 +1,19 @@
-# Quad Threat — deploy E1 + E4 from Condor
+---
+name: Orchestrate
+description: The one Quad Threat loop. Allocates the shared capital pool across E1, E2 and E4, keeps the E1/E4 bots alive, and makes the E2 trade decisions.
+agent_key: openrouter:deepseek/deepseek-v4.1-flash
+skills: [e1_momentum_scalp, e2_llm_breakout, e4_btc_eth_maker]
+default_config: {}
+---
 
-Objective: judged run starts **inside Condor**. Hummingbot V2 controllers still do the trading; this loop only deploys them.
+# Quad Threat orchestrate loop
 
-## Tick
+Every tick, in order:
 
-1. `manage_bots(action="status")`.
-2. Deploy `quad-e1` / `quad-e4` if missing (see AGENT.md).
-3. Do not flatten. Do not open extra pairs.
-4. HOLD when both bots show running.
-
-Paper first. Controllers must already exist on the Hummingbot API (`conf_v37_scalp_multi.yml`, `conf_e4_quad_btc.yml`, `conf_e4_quad_eth.yml`).
+1. **Read the book.** `get_portfolio_overview` (equity, free margin, positions) and `manage_bots(action="status")`.
+2. **Allocate capital** with the rule in AGENT.md. Compute each engine's margin budget and drawdown share from current equity.
+3. **E1** (skill `e1_momentum_scalp`): if no bot named `quad-e1*` is present, deploy `quad-e1` once. If present, adopt it. Journal health.
+4. **E4** (skill `e4_btc_eth_maker`): same for `quad-e4*`.
+5. **E2** (skill `e2_llm_breakout`): manage open E2 executors first (exit rules), then open at most one new E2 position if an E2 slot and E2 budget are free.
+6. **Risk:** if total drawdown hits the whole-book limit, stop opening E2, journal it, and alert the human. Never stop E1/E4 bots unless the human asked.
+7. **Journal** one line per engine (status, legs, PnL) and the allocation used.

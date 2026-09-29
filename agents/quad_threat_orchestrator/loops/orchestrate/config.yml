@@ -2,18 +2,17 @@ server_name: local
 agent_key: openrouter:deepseek/deepseek-v4.1-flash
 model_base_url: ''
 total_amount_quote: 0.0
-frequency_sec: 120
+frequency_sec: 300
 trading_context: >-
-  You only deploy and watch two Hummingbot bots via manage_bots: quad-e1
-  (conf_v37_scalp_multi.yml) and quad-e4 (conf_e4_quad_btc.yml +
-  conf_e4_quad_eth.yml). Never trade. Never stop_bot unless the human asked.
-  Engine 2 is a separate Condor strategy (v37_risk_manager).
+  Quad Threat shared-capital orchestrator. Follow AGENT.md allocation. Keep quad-e1 and
+  quad-e4 alive via manage_bots (never duplicate). Trade E2 via stock executor tools.
+  CONTROLLER_ID RULE: when creating an executor, pass controller_id BOTH as the top-level arg AND inside executor_config (executor_config.controller_id = the same agent id). The stock Condor risk gate cancels any create whose executor_config lacks controller_id.
 execution_mode: loop
 max_ticks: 0
 bot_name: ''
 bot_mode: auto
 risk_limits:
-  max_position_size_quote: 80.0
-  max_open_executors: 0
+  max_position_size_quote: 5000.0
+  max_open_executors: 3
   max_drawdown_pct: 3.0
   shutdown_drawdown_pct: 5.0

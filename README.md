@@ -6,15 +6,15 @@ using only Condor's standard built-in tools (`manage_bots`, `manage_controllers`
 | Engine | Where | What |
 |---|---|---|
 | **E1** scalp | loop `orchestrate` → bot `quad-e1` | Hummingbot V2 controller `v37_scalp_multi` (multi-pair ROC/RSI/BB scalp) |
-| **E2** breakout | loop `e2_breakout` | LLM trader, position executors on XAU/CL/DOGE/NEAR/LTC at 20x |
+| **E2** breakout | loop `orchestrate` + skill `e2_llm_breakout` | LLM trader, position executors on DOGE/NEAR/LTC at 20x (stock executor tools) |
 | **E4** maker | loop `orchestrate` → bot `quad-e4` | Hummingbot V2 controller `pmm_quad` on BTC/ETH (renamed so it never overwrites stock `pmm_simple`) |
 
 ## Layout
 ```
 agents/quad_threat_orchestrator/
   AGENT.md                 # agent definition (server_name: local, openrouter:deepseek/deepseek-v4.1-flash)
-  loops/orchestrate/       # deploys + adopts quad-e1 / quad-e4 (never duplicates)
-  loops/e2_breakout/       # Engine 2 playbook + config
+  loops/orchestrate/       # ONE loop: shared-capital allocation, E1/E4 bots, E2 decisions
+  skills/                  # one SKILL.md per engine (E1, E2, E4)
   routines/                # e2_order_sizer (venue-safe sizing), market_analysis
   controllers/             # controller code: generic/v37_scalp_multi.py, market_making/pmm_quad.py
   conf/                    # controller configs + E1 universe / strategy toggles
@@ -27,7 +27,7 @@ docs/
 2. Copy `controllers/*` into the Hummingbot API `bots/controllers/` and upload `conf/conf_*.yml` with `manage_controllers`
    (put `universe.yml` / `active_strategy.json` next to the controller configs).
 3. Set `.env` from `.env.example` (OpenRouter key, Hummingbot API URL/credentials). Never commit real values.
-4. Start the `orchestrate` and `e2_breakout` loops from Condor.
+4. Start the single `orchestrate` loop from Condor; it allocates the shared capital pool (see AGENT.md).
 
 ## Sizing (this pack is sized for an ~$800 book)
 - **E1:** `position_size_quote: 25` margin × `max_open_positions: 3` (`total_amount_quote: 75`), leverage from `universe.yml`
