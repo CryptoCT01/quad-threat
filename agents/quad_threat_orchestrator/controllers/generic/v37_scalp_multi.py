@@ -49,6 +49,23 @@ _E2_FILL_PATHS = [
 
 
 # ---------------------------------------------------------------------------
+
+def _hbot_api_url() -> str:
+    """Hummingbot API base URL (config via env HBOT_API_URL)."""
+    import os
+    return os.environ.get("HBOT_API_URL", "http://hummingbot-api:8000").rstrip("/")
+
+
+def _hbot_api_headers() -> dict:
+    """JSON headers + Basic auth from env HBOT_API_USERNAME / HBOT_API_PASSWORD (no defaults)."""
+    import base64
+    import os
+    h = {"Content-Type": "application/json"}
+    user, pw = os.environ.get("HBOT_API_USERNAME"), os.environ.get("HBOT_API_PASSWORD")
+    if user and pw:
+        h["Authorization"] = "Basic " + base64.b64encode(f"{user}:{pw}".encode()).decode()
+    return h
+
 # Venue-safe sizing (finals fix, blockers 3 + 4).
 #
 # Bitget perps: min_order_size = minTradeNum, min_base_amount_increment =
@@ -425,10 +442,10 @@ class V37ScalpMultiController(ControllerBase):
             import json as _json
             data = _json.dumps({"trading_pair": pair, "leverage": lev}).encode()
             req = urllib.request.Request(
-                f"http://localhost:8000/trading/master_account/{self.config.connector_name}/leverage",
+                f"{_hbot_api_url()}/trading/master_account/{self.config.connector_name}/leverage",
                 data=data,
                 method="POST",
-                headers={"Content-Type": "application/json", "Authorization": "Basic YWRtaW46YWRtaW4="},
+                headers=_hbot_api_headers(),
             )
             with urllib.request.urlopen(req, timeout=5) as resp:
                 body = resp.read().decode()
@@ -579,10 +596,10 @@ class V37ScalpMultiController(ControllerBase):
                 "connector_names": [self.config.connector_name],
             }).encode()
             req = urllib.request.Request(
-                "http://localhost:8000/trading/positions",
+                f"{_hbot_api_url()}/trading/positions",
                 data=payload,
                 method="POST",
-                headers={"Content-Type": "application/json", "Authorization": "Basic YWRtaW46YWRtaW4="},
+                headers=_hbot_api_headers(),
             )
             with urllib.request.urlopen(req, timeout=4) as resp:
                 body = _json.loads(resp.read().decode())

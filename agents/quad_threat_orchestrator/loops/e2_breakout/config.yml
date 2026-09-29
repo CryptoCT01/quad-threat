@@ -1,12 +1,13 @@
 # Engine 2 only — independent Condor LLM breakout loop.
 # Engine 1 remains v37_scalp_multi and owns its separate 3 controller slots.
-# Engine 4 remains pmm_simple on BTC/ETH.
+# Engine 4 remains pmm_quad on BTC/ETH.
 server_name: local
-agent_key: openrouter:YOUR_MODEL_HERE
+agent_key: openrouter:deepseek/deepseek-v4.1-flash
 model_base_url: ''
 total_amount_quote: 75.0
 frequency_sec: 300
 trading_context: >-
+  CONTROLLER_ID RULE: when creating an executor, pass controller_id BOTH as the top-level arg AND inside executor_config (executor_config.controller_id = the same agent id). The stock Condor risk gate cancels any create whose executor_config lacks controller_id.
   LIVE Bitget USDT-M perpetuals on server local. You are Engine 2, a breakout
   trader and risk overlay. Run every 300 seconds. You may open and manage up to
   3 Engine-2 positions. OPEN only the 20x basket: XAU-USDT, CL-USDT, DOGE-USDT,

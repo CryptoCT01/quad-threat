@@ -1,12 +1,12 @@
 server_name: local
-agent_key: openrouter:YOUR_MODEL_HERE
+agent_key: openrouter:deepseek/deepseek-v4.1-flash
 model_base_url: ''
 total_amount_quote: 0.0
 frequency_sec: 120
 trading_context: >-
   You only deploy and watch two Hummingbot bots via manage_bots: quad-e1
-  (conf_v37_scalp_multi.yml) and quad-e4 (conf_e4_pmm_btc.yml +
-  conf_e4_pmm_eth.yml). Never trade. Never stop_bot unless the human asked.
+  (conf_v37_scalp_multi.yml) and quad-e4 (conf_e4_quad_btc.yml +
+  conf_e4_quad_eth.yml). Never trade. Never stop_bot unless the human asked.
   Engine 2 is a separate Condor strategy (v37_risk_manager).
 execution_mode: loop
 max_ticks: 0

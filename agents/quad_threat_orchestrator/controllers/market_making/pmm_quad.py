@@ -106,8 +106,8 @@ def venue_safe_amount(
     return q, True
 
 
-class PMMSimpleConfig(MarketMakingControllerConfigBase):
-    controller_name: str = "pmm_simple"
+class PMMQuadConfig(MarketMakingControllerConfigBase):
+    controller_name: str = "pmm_quad"
 
     # Inventory-priced quote (mini Avellaneda–Stoikov) knobs.
     # Skew amount = alpha * half_spread * (inventory_quote / cap_quote), capped.
@@ -119,7 +119,7 @@ class PMMSimpleConfig(MarketMakingControllerConfigBase):
     crash_halt_pct: float = 0.006
 
 
-class PMMSimpleController(MarketMakingControllerBase):
+class PMMQuadController(MarketMakingControllerBase):
     """Fixed-spread PMM with inventory one-siding (bleed control).
 
     When short: buy-only (cover) — never add to the short.
@@ -127,7 +127,7 @@ class PMMSimpleController(MarketMakingControllerBase):
     When flat: two-sided quotes, still hard-capped at 90% of total_amount_quote.
     """
 
-    def __init__(self, config: PMMSimpleConfig, *args, **kwargs):
+    def __init__(self, config: PMMQuadConfig, *args, **kwargs):
         super().__init__(config, *args, **kwargs)
         self.config = config
         self._lev_set = False

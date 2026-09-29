@@ -1,8 +1,8 @@
-id: e4_pmm_eth
-controller_name: pmm_simple
+id: e4_quad_btc
+controller_name: pmm_quad
 controller_type: market_making
 connector_name: bitget_perpetual
-trading_pair: ETH-USDT
+trading_pair: BTC-USDT
 buy_spreads: "0.0008"
 sell_spreads: "0.0008"
 buy_amounts_pct: "100"

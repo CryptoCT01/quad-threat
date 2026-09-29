@@ -23,9 +23,10 @@ from hummingbot.strategy_v2.executors.position_executor.data_types import Positi
 from hummingbot.strategy_v2.models.executor_actions import CreateExecutorAction  # noqa: E402
 
 from controllers.generic import v37_scalp_multi as v37  # noqa: E402
-from controllers.market_making import pmm_simple as pmm  # noqa: E402
+from controllers.market_making import pmm_quad as pmm  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
+AG = ROOT / "agents" / "quad_threat_orchestrator"
 
 
 def bitget_rule(pair, min_trade_num, size_mult, price_place, min_usdt="5"):
@@ -59,12 +60,6 @@ def connector_accepts(amount, price, rule):
 HELPER_MODULES = [v37, pmm]
 
 
-def _bridge():
-    spec = importlib.util.spec_from_file_location("qt_bridge", ROOT / "condor-mcp" / "executors.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
 
 def _sizer():
     # The routine imports Condor-only modules at top level; stub just those.
@@ -73,14 +68,14 @@ def _sizer():
     sys.modules["telegram.ext"].ContextTypes = types.SimpleNamespace(DEFAULT_TYPE=object)
     sys.modules["config_manager"].get_client = None
     sys.modules["routines.base"].RoutineResult = dict
-    path = ROOT / "condor-agent" / "v37_risk_manager" / "routines" / "e2_order_sizer.py"
+    path = AG / "routines" / "e2_order_sizer.py"
     spec = importlib.util.spec_from_file_location("qt_sizer", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
 
 
-ALL_HELPERS = HELPER_MODULES + [_bridge(), _sizer()]
+ALL_HELPERS = HELPER_MODULES + [_sizer()]
 
 
 # ---------------------------------------------------------------- blocker 4
@@ -145,23 +140,23 @@ def test_quantize_price_side_aware():
 
 # ---------------------------------------------------------------- config compat (latest HB)
 def _yaml(rel):
-    return yaml.safe_load((ROOT / rel).read_text())
+    return yaml.safe_load((AG / rel).read_text())
 
 
-@pytest.mark.parametrize("rel", ["conf/e4/controllers/conf_e4_pmm_btc.yml", "conf/e4/controllers/conf_e4_pmm_eth.yml"])
+@pytest.mark.parametrize("rel", ["conf/conf_e4_quad_btc.yml", "conf/conf_e4_quad_eth.yml"])
 def test_e4_configs_load_on_latest_hummingbot(rel):
-    cfg = pmm.PMMSimpleConfig(**_yaml(rel))
+    cfg = pmm.PMMQuadConfig(**_yaml(rel))
     assert cfg.id and cfg.trading_pair in {"BTC-USDT", "ETH-USDT"}
     assert cfg.connector_name == "bitget_perpetual"
 
 
 def test_e1_config_loads_on_latest_hummingbot():
-    cfg = v37.V37ScalpMultiConfig(**_yaml("conf/controllers/conf_v37_scalp_multi.yml"))
+    cfg = v37.V37ScalpMultiConfig(**_yaml("conf/conf_v37_scalp_multi.yml"))
     assert cfg.id == "v37_scalp_multi"
     cfg.triple_barrier_config  # validators in PositionExecutor data types accept it
 
 
-# ---------------------------------------------------------------- pmm_simple integration
+# ---------------------------------------------------------------- pmm_quad integration
 class FakeMDP:
     def __init__(self, rule, price):
         self.rule, self.price, self.connectors = rule, Decimal(price), {}
@@ -182,8 +177,8 @@ class FakeMDP:
 def _pmm(rel, rule, price, **overrides):
     data = _yaml(rel)
     data.update(overrides)
-    ctrl = object.__new__(pmm.PMMSimpleController)
-    ctrl.config = pmm.PMMSimpleConfig(**data)
+    ctrl = object.__new__(pmm.PMMQuadController)
+    ctrl.config = pmm.PMMQuadConfig(**data)
     ctrl.market_data_provider = FakeMDP(rule, price)
     ctrl.processed_data = {"reference_price": Decimal(price), "spread_multiplier": Decimal("1")}
     ctrl.executors_info = []
@@ -193,13 +188,13 @@ def _pmm(rel, rule, price, **overrides):
 
 
 def test_pmm_e4_live_config_quotes_both_sides():
-    ctrl = _pmm("conf/e4/controllers/conf_e4_pmm_btc.yml", BTC, "64123.4")
+    ctrl = _pmm("conf/conf_e4_quad_btc.yml", BTC, "64123.4")
     actions = ctrl.determine_executor_actions()
     creates = [a for a in actions if isinstance(a, CreateExecutorAction)]
     assert {a.executor_config.side for a in creates} == {TradeType.BUY, TradeType.SELL}
     for a in creates:
         c = a.executor_config
-        assert isinstance(c, PositionExecutorConfig) and a.controller_id == "e4_pmm_btc"
+        assert isinstance(c, PositionExecutorConfig) and a.controller_id == "e4_quad_btc"
         assert c.amount % BTC.min_base_amount_increment == 0
         assert c.entry_price % BTC.min_price_increment == 0
         assert connector_accepts(c.amount, c.entry_price, BTC)
@@ -207,7 +202,7 @@ def test_pmm_e4_live_config_quotes_both_sides():
 
 def test_pmm_total_amount_equal_to_venue_minimum_still_quotes():
     # buy 50% + sell 50% of total -> each level gets exactly the $5 venue minimum.
-    ctrl = _pmm("conf/e4/controllers/conf_e4_pmm_eth.yml", LTC, "97.37", total_amount_quote=10)
+    ctrl = _pmm("conf/conf_e4_quad_eth.yml", LTC, "97.37", total_amount_quote=10)
     creates = [a for a in ctrl.determine_executor_actions() if isinstance(a, CreateExecutorAction)]
     assert len(creates) == 2
     for a in creates:
@@ -215,7 +210,7 @@ def test_pmm_total_amount_equal_to_venue_minimum_still_quotes():
 
 
 def test_pmm_total_amount_below_venue_minimum_refused_loudly(caplog):
-    ctrl = _pmm("conf/e4/controllers/conf_e4_pmm_eth.yml", LTC, "97.37", total_amount_quote=8)
+    ctrl = _pmm("conf/conf_e4_quad_eth.yml", LTC, "97.37", total_amount_quote=8)
     with caplog.at_level(logging.ERROR):
         creates = [a for a in ctrl.determine_executor_actions() if isinstance(a, CreateExecutorAction)]
     assert creates == []
@@ -224,7 +219,7 @@ def test_pmm_total_amount_below_venue_minimum_refused_loudly(caplog):
 
 # ---------------------------------------------------------------- v37 integration
 def _v37(position_size, rule, price, pair="SOL-USDT"):
-    cfg = v37.V37ScalpMultiConfig(**_yaml("conf/controllers/conf_v37_scalp_multi.yml"))
+    cfg = v37.V37ScalpMultiConfig(**_yaml("conf/conf_v37_scalp_multi.yml"))
     cfg.trading_pairs = [pair]
     cfg.leverage_map = {pair: 10}
     cfg.position_size_quote = Decimal(str(position_size))
@@ -305,78 +300,3 @@ def test_v37_failed_entry_retries_fast(caplog):
     assert "no order reached the exchange" in caplog.text
     failed.close_type = CloseType.STOP_LOSS
     assert ctrl._effective_cooldown("SOL-USDT") == 2 * 1500
-
-
-# ---------------------------------------------------------------- Condor bridge (blocker 1 + 2)
-def _install_fake_condor(monkeypatch, results):
-    calls = []
-
-    async def create_position_executor(client, **kw):
-        calls.append(kw)
-        return results[min(len(calls) - 1, len(results) - 1)]
-
-    class Cache:
-        async def get(self, client, connector, pair):
-            return {"min_order_size": 0.001, "min_base_amount_increment": 0.001,
-                    "min_notional_size": 0.0, "min_order_value": 5.0}
-
-    async def fetch_current_price(client, connector, pair, **k):
-        return 97.37
-
-    tools = types.ModuleType("mcp_servers.hummingbot_api.tools")
-    tools.executor_create = types.SimpleNamespace(create_position_executor=create_position_executor)
-    hc = types.ModuleType("mcp_servers.hummingbot_api.hummingbot_client")
-    hc.trading_rules_cache = Cache()
-    md = types.ModuleType("condor.fetchers.market_data")
-    md.fetch_current_price = fetch_current_price
-    for name, mod in {
-        "mcp_servers": types.ModuleType("mcp_servers"),
-        "mcp_servers.hummingbot_api": types.ModuleType("mcp_servers.hummingbot_api"),
-        "mcp_servers.hummingbot_api.tools": tools,
-        "mcp_servers.hummingbot_api.hummingbot_client": hc,
-        "condor": types.ModuleType("condor"),
-        "condor.fetchers": types.ModuleType("condor.fetchers"),
-        "condor.fetchers.market_data": md,
-    }.items():
-        monkeypatch.setitem(sys.modules, name, mod)
-    return calls
-
-
-def test_bridge_id_none_is_failure_then_retry(monkeypatch):
-    b = _bridge()
-    calls = _install_fake_condor(monkeypatch, [
-        {"action": "create", "executor_id": None},
-        {"action": "create", "executor_id": "EX2", "status": "RUNNING"},
-    ])
-    out = asyncio.run(b.create_e2_position(object(), trading_pair="LTC-USDT", side="LONG"))
-    assert out["ok"] and out["executor_id"] == "EX2" and out["attempts"] == 2
-    kw = calls[0]
-    assert kw["side"] == 1 and kw["leverage"] == 20 and kw["open_order_type"] == 1
-    assert kw["take_profit_order_type"] == 2 and kw["controller_id"] == "v37_risk_manager"
-    assert isinstance(kw["amount"], float)
-    assert connector_accepts(Decimal(str(kw["amount"])), Decimal("97.37"), LTC)
-
-
-def test_bridge_never_reports_dead_executor_as_open(monkeypatch):
-    b = _bridge()
-    _install_fake_condor(monkeypatch, [
-        {"executor_id": "EX1", "status": "TERMINATED", "close_type": "INSUFFICIENT_BALANCE"},
-    ])
-    out = asyncio.run(b.create_e2_position(object(), trading_pair="DOGE-USDT", side=2))
-    assert not out["ok"] and out["attempts"] == b.MAX_SUBMIT_ATTEMPTS
-    assert "NO position is open" in out["error"] or out["error"]
-
-
-def test_bridge_refuses_e4_and_offbasket(monkeypatch):
-    b = _bridge()
-    _install_fake_condor(monkeypatch, [{"executor_id": "X"}])
-    assert not asyncio.run(b.create_e2_position(object(), trading_pair="BTC-USDT", side=1))["ok"]
-    assert not asyncio.run(b.create_e2_position(object(), trading_pair="SOL-USDT", side=1))["ok"]
-
-
-def test_bridge_is_live_rules():
-    b = _bridge()
-    assert not b._is_live({"executor_id": None})
-    assert not b._is_live({"error": "x", "executor_id": "a"})
-    assert not b._is_live({"executor_id": "a", "status": "TERMINATED", "close_type": "FAILED"})
-    assert b._is_live({"executor_id": "a", "status": "RUNNING"})
