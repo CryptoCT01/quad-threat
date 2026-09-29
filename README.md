@@ -33,7 +33,7 @@ docs/
 - **E1:** `position_size_quote: 25` margin × `max_open_positions: 3` (`total_amount_quote: 75`), leverage from `universe.yml`
   (SOL/XRP 10x, else 5x). The controller's code default (`10`) is only used if the config omits the field; the YAML is authoritative.
 - **E2:** $25 margin per position, max 3, 0.4% TP / 0.5% SL floor. Stock Condor has no SL-amend tool, so profit protection exits at market via `stop_executor`.
-- **E4:** BTC/ETH, 8 bps each side, LIMIT TP 6 bps, SL 15 bps.
+- **E4:** BTC/ETH at 100x, 8 bps each side (one-side + inventory skew), LIMIT TP 6 bps, SL 15 bps, TIME 3 min, `total_amount_quote: 200` per pair, refresh 60s.
 Scale all sizes and the deploy drawdown caps down on a small live book.
 
 ## Tests
