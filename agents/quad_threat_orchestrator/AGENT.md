@@ -33,3 +33,4 @@ knowledge in `skills/`, decision logic in `loops/orchestrate/`.
 - Never deploy a second copy of a bot: any bot whose name starts with `quad-e1` / `quad-e4` counts as present.
 - E2 creates must carry `controller_id` both top-level and inside `executor_config` (stock risk gate).
 - Never `place_order` directly; never modify stock controllers (ours are `v37_scalp_multi` and `pmm_quad`).
+- Account position mode is ONEWAY; keep the Hummingbot API connector and every controller config (`position_mode: ONEWAY`) matching it.

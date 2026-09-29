@@ -8,6 +8,8 @@ source: quad_threat
 
 # E2 LLM breakout
 
+**POSITION MODE: the account is ONEWAY on Bitget. The Hummingbot API connector must match (`POST /trading/{account}/bitget_perpetual/position-mode {"position_mode":"ONEWAY"}`); a HEDGE/ONEWAY mismatch makes every open fail with "Failed to submit order" and the executor ends FAILED after 10 retries.**
+
 **CONTROLLER_ID RULE: when creating an executor, pass controller_id BOTH as the top-level arg AND inside executor_config (executor_config.controller_id = the same agent id). The stock Condor risk gate cancels any create whose executor_config lacks controller_id.**
 
 **UNIVERSE: open only DOGE-USDT, NEAR-USDT, LTC-USDT. XAU-USDT / CL-USDT orders were rejected by the Hummingbot bitget_perpetual connector on 29 Sep 2026 ("Failed to submit order") - re-enable only after a verified test order.**
