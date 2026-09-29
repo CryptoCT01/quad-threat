@@ -75,10 +75,36 @@ def _sym(pair: str) -> str:
     return pair.replace("-", "")
 
 
-def _round_size(n: float, volume_place: int, min_trade: float) -> float:
-    q = 10 ** volume_place
-    out = max(min_trade, int(n * q) / q)
-    return out
+def _round_size(
+    n: float,
+    volume_place: int,
+    min_trade: float,
+    size_multiplier: float = 0.0,
+    min_trade_usdt: float = 0.0,
+    price: float = 0.0,
+) -> float:
+    """Quantize to the contract step FIRST, then clear minTradeNum and minTradeUSDT (+5%).
+
+    Finals fix (blocker 4): the old version floored to volumePlace and only clamped
+    to minTradeNum, so a size at the USDT minimum rounded below minTradeUSDT and
+    Bitget rejected it. Rounds UP by whole steps when short. Returns 0.0 when the
+    budget itself is below the venue minimum (caller refuses with an error).
+    """
+    from decimal import ROUND_DOWN, ROUND_UP, Decimal
+
+    step = Decimal(str(size_multiplier or 0)) or Decimal(1).scaleb(-int(volume_place))
+    amt = Decimal(str(n))
+    px = Decimal(str(price or 0))
+    q = (amt / step).to_integral_value(rounding=ROUND_DOWN) * step
+    need = Decimal(str(min_trade or 0))
+    if px > 0 and min_trade_usdt:
+        floor_quote = max(Decimal(str(min_trade_usdt)), need * px)
+        if amt * px < floor_quote * Decimal("0.999999"):  # float budget tolerance
+            return 0.0
+        need = max(need, Decimal(str(min_trade_usdt)) * Decimal("1.05") / px)
+    if q < need:
+        q = (need / step).to_integral_value(rounding=ROUND_UP) * step
+    return float(q)
 
 
 def _hold_side_oneway(hold: str) -> str:
@@ -567,6 +593,14 @@ def main() -> None:
         min_trade = float(crow.get("minTradeNum") or 0)
     except (TypeError, ValueError):
         min_trade = 0.0
+    try:
+        size_mult = float(crow.get("sizeMultiplier") or 0)
+    except (TypeError, ValueError):
+        size_mult = 0.0
+    try:
+        min_usdt = float(crow.get("minTradeUSDT") or 0)
+    except (TypeError, ValueError):
+        min_usdt = 0.0
 
     tick = _bitget(
         keys,
@@ -581,9 +615,16 @@ def main() -> None:
     if last <= 0:
         print(json.dumps({"ok": False, "error": "no_price", "pair": pair, "raw": tick.get("code")}))
         return
-    size = _round_size((margin * lev) / last, volume_place, min_trade)
+    size = _round_size((margin * lev) / last, volume_place, min_trade, size_mult, min_usdt, last)
     if size <= 0:
-        print(json.dumps({"ok": False, "error": "size_zero", "pair": pair}))
+        print(json.dumps({
+            "ok": False,
+            "error": "below_venue_minimum",
+            "pair": pair,
+            "notional_budget": round(margin * lev, 4),
+            "minTradeUSDT": min_usdt,
+            "minTradeNum": min_trade,
+        }))
         return
     notional = size * last
     client_oid = f"e2{int(time.time()*1000)}"[-20:]
@@ -644,7 +685,15 @@ def main() -> None:
         print(json.dumps(plan))
         return
     data = order.get("data") or {}
-    order_id = data.get("orderId") or client_oid
+    order_id = data.get("orderId")
+    if not order_id:
+        # Finals fix (blocker 2): no exchange orderId means nothing was placed.
+        # Do not fabricate an executor_id from the clientOid and report success.
+        plan["ok"] = False
+        plan["error"] = "no_order_id"
+        plan["bitget_code"] = order.get("code")
+        print(json.dumps(plan))
+        return
     plan["orderId"] = order_id
     plan["executor_id"] = order_id
 
