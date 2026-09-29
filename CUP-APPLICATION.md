@@ -1,6 +1,6 @@
 # Agent Builders Cup — product copy (Bitget)
 
-Short paste-ready description of the **live Quad Threat** desk. Do not invent PnL or volume on forms. Confirm dates on Bitget’s current Cup page (sandbox target: early October).
+Do not invent PnL or volume on forms. Confirm dates on Bitget’s current Cup page.
 
 ---
 
@@ -12,45 +12,46 @@ Agent — AI / autonomous trading agent
 
 ## Summary
 
-**Quad Threat** is a live Bitget USDT-M stack on one account: Hummingbot ensemble scalp (Engine 1), Condor LLM breakout + risk overlay (Engine 2), Hummingbot `pmm_simple` maker on BTC+ETH (Engine 4), and a custom Cup dashboard. There is **no Engine 3 controller** — E4 is the maker.
-
-Margin and slot caps are enforced in conf/code, not by hoping the model behaves.
+**Quad Threat** is a Bitget USDT-M stack on one account, started from **Condor**: Engine 1 Hummingbot ensemble scalp, Engine 2 Condor LLM breakout (20× basket), Engine 4 Hummingbot `pmm_simple` maker on BTC+ETH, plus a Cup dashboard. There is **no Engine 3 controller** — E3 is optional manual trading. Slot caps and pair ownership are enforced in conf/code.
 
 ---
 
 ## How the pieces play together
 
-| Piece | Role |
-|---|---|
-| Engine 1 `v37_scalp_multi` | Directional P&L — 15m ensemble (SUPER_A / ROC_RSI / BB_VOL), capped scalp slots |
-| Engine 2 Condor `v37_risk_manager` | 300s loop — opens only a small high-leverage basket; can flatten book on invalid thesis / 3% DD |
-| Engine 4 `pmm_simple` | Two-sided quotes BTC-USDT + ETH-USDT for maker volume / inventory |
-| Dashboard `:8770` | Observe stack, slots, journal; start/stop controls |
+| Piece | Role | How it starts |
+|---|---|---|
+| Orchestrator `quad_threat_orchestrator` | Condor loop that **deploys** E1 + E4 via `manage_bots` | Condor strategy |
+| Engine 1 `v37_scalp_multi` | Directional P&L — 15m ensemble, 3 slots | Hummingbot bot `quad-e1` |
+| Engine 2 `v37_risk_manager` | 300s LLM breakout + risk overlay | Condor strategy |
+| Engine 4 `pmm_simple` | Two-sided quotes BTC+ETH | Hummingbot bot `quad-e4` |
+| Dashboard `:8770` | Observe stack, journal | Host UI |
 
-**Ownership:** E2 must not open BTC/ETH while E4 quotes them. E1 scalp slots are separate from E4 inventory. E2 overlay does not “clip” E1 greens that already have SL/TP/trail.
+**Ownership:** E2 must not open BTC/ETH. E1 skips E2 basket + BTC/ETH. Personal stock perps (e.g. AVGO) are Engine Free, not E1.
 
 ---
 
 ## Markets
 
 - Venue: Bitget USDT-M (`bitget_perpetual`), ONEWAY
-- E4 maker: BTC-USDT, ETH-USDT (pack); live script may also reference XRP/DOGE
-- E1 universe: crypto + commodities (XAU, CL) + stock perps in `conf/universe.yml`
-- E2 opens (snapshot): XAU, CL, DOGE, NEAR, APT
+- E4: BTC-USDT, ETH-USDT only
+- E2 opens: XAU, CL, DOGE, NEAR, LTC (20×)
+- E1: `conf/universe.yml` minus E2 basket and BTC/ETH
 
 ---
 
-## Parameters (snapshot)
+## Parameters ($800 book)
 
 | Piece | Value |
 |---|---|
-| Scalp margin | $10 / position |
-| Scalp slots | max 3 |
-| Score | 0.66 (≥2 of 3 engines) |
-| Scalp SL / TP / trail | 0.8% / 1.6% / 1.2%·0.8% |
-| Condor tick | 300s · max 3 E2 · 3% daily DD halt |
-| E4 spreads (BTC/ETH YAML) | 5 bps (`0.0005`) |
+| E1 margin | **$25** / position · max 3 · total $75 |
+| E2 margin | **$25** / position · max 3 · total $75 · 20× |
+| E2 bank | LIMIT TP 0.4% · SL 0.5% |
+| E2 tick | 300s · 3% daily DD halt |
+| E4 quote / pair | **800** @ 100× · 8 bps · refresh **30s** · time_limit **7200s** |
+| E4 DD | global 80 / controller 40 |
 | LLM | `openrouter:YOUR_MODEL_HERE` (configure locally) |
+
+Do **not** paste these sizes onto a ~$60 live account.
 
 ---
 

@@ -1,0 +1,19 @@
+server_name: local
+agent_key: openrouter:YOUR_MODEL_HERE
+model_base_url: ''
+total_amount_quote: 0.0
+frequency_sec: 120
+trading_context: >-
+  You only deploy and watch two Hummingbot bots via manage_bots: quad-e1
+  (conf_v37_scalp_multi.yml) and quad-e4 (conf_e4_pmm_btc.yml +
+  conf_e4_pmm_eth.yml). Never trade. Never stop_bot unless the human asked.
+  Engine 2 is a separate Condor strategy (v37_risk_manager).
+execution_mode: loop
+max_ticks: 0
+bot_name: ''
+bot_mode: auto
+risk_limits:
+  max_position_size_quote: 0.0
+  max_open_executors: 0
+  max_drawdown_pct: 3.0
+  shutdown_drawdown_pct: 5.0

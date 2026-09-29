@@ -1,14 +1,15 @@
 # Quad Threat
 
-**Bitget USDT-M multi-engine desk** — one account, three trading engines + Cup dashboard.
+**Bitget USDT-M multi-engine desk** — one account, three trading engines + Cup dashboard. **Condor is the entry:** it deploys Engine 1 and Engine 4 as Hummingbot bots (`manage_bots`) and runs Engine 2 as its own loop.
 
-Public snapshot for Michael / Bitget early-October sandbox. Clone this pack, install upstream Hummingbot + Condor, copy controllers/agent/conf in, paper first.
+Public snapshot for Michael / Bitget sandbox. Sized for an **~$800** book. Clone this pack, install upstream Hummingbot + Condor, copy controllers/agent/conf in, paper first. Do **not** use these sizes on a ~$60 live account.
 
 | Piece | What it is |
 |---|---|
-| **Engine 1** | Hummingbot controller `v37_scalp_multi` (momentum / ensemble scalp) |
-| **Engine 2** | Condor agent `v37_risk_manager` / `disciplined_perps_strategy` (LLM breakout + risk overlay) |
-| **Engine 4 (Maker)** | Hummingbot `pmm_simple` BTC+ETH two-sided quotes |
+| **Orchestrator** | Condor agent `quad_threat_orchestrator` — `manage_bots` deploy of E1 + E4 |
+| **Engine 1** | Hummingbot controller `v37_scalp_multi` (bot `quad-e1`) |
+| **Engine 2** | Condor agent `v37_risk_manager` / `disciplined_perps_strategy` |
+| **Engine 4 (Maker)** | Hummingbot `pmm_simple` BTC+ETH (bot `quad-e4`) |
 | **Dashboard** | Custom Cup UI (`hbot_dash.py` + `hbot-dashboard.html` + `hbot_server.py`) on `:8770` |
 
 ### Engine 3 — Engine Free (manual / personal)
@@ -22,10 +23,9 @@ It is **Engine Free**: optional **manual trading** on the same Bitget account. A
 - Pair ownership still matters: avoid fighting E1/E2/E4 on the same symbols while those engines are live.
 
 ```
-Engine 1 ──► directional P&L (scalp slots)
-Engine 2 ──► LLM opens on basket + can flatten book
-Engine 4 ──► maker volume on BTC/ETH (own inventory)
-Dashboard ─► watches all three, start/stop, journal
+Condor orchestrator ──► manage_bots ──► Engine 1 (quad-e1) + Engine 4 (quad-e4)
+Condor Engine 2     ──► LLM basket opens + overlay
+Dashboard           ──► watches all three, journal
 ```
 
 See `quad-threat-flowchart.png` if present.
@@ -81,7 +81,7 @@ Live Cup UI on `:8770` — engines, open positions, performance, and journal in 
 - Connector: `bitget_perpetual`
 - Signals: SUPER_A, ROC_RSI, BB_VOL (toggles in `active_strategy.json`)
 - Geometry (live snapshot): SL **0.8%**, TP **1.6%**, trail **1.2% / 0.8%**, cooldown **1500s**, time limit **3h**, score **0.66**
-- Margin: `$10` per position (`position_size_quote`); leverage from universe map (BTC/ETH 15x, SOL/XRP 10x, else 5x)
+- Margin: **`$25`** per position on an **$800** book (`position_size_quote`); leverage from universe map (SOL/XRP 10x, else 5x). Skip E2 basket and BTC/ETH.
 
 Install into a Hummingbot tree under `controllers/generic/` and matching `conf/`, then import/start with your usual V2 + controllers flow (`scripts/v2_with_controllers.py` included as the wrapper used live).
 
@@ -93,11 +93,25 @@ Install into a Hummingbot tree under `controllers/generic/` and matching `conf/`
   - `AGENT.md`
   - `strategies/disciplined_perps_strategy/{strategy.md,config.yml,learnings.md}`
   - `routines/market_analysis.py` + `routines/__init__.py`
-- Optional MCP tool: `condor-mcp/executors.py` (copy into Condor’s hummingbot_api tools if you use the custom executor helpers)
-- LLM: set `agent_key: openrouter:YOUR_MODEL_HERE (placeholder — no live model id committed)
-- Needs OpenRouter key in Condor `.env` (see `.env.example`)
+- Optional MCP tool: `condor-mcp/executors.py`
+- LLM: set `agent_key: openrouter:YOUR_MODEL_HERE`
+- Margin on $800 book: **$25** × 3 (`total_amount_quote: 75`)
 
-Copy the agent folder into your Condor `agents/` tree. Start Condor per upstream docs; start the strategy in **paper** first.
+Copy the agent folder into Condor `agents/`. Start in **paper** first.
+
+---
+
+## Condor wrap — `quad_threat_orchestrator`
+
+Cup rule: the judged run is a **Condor agent that deploys/manages** the V2 controllers. CLI-only `hummingbot_quickstart` is not the entry.
+
+- Pack: `condor-agent/quad_threat_orchestrator/`
+- Tick 120s. Tools: `manage_bots` only. **Does not trade.**
+- Deploys bot `quad-e1` with `conf_v37_scalp_multi.yml`
+- Deploys bot `quad-e4` with `conf_e4_pmm_btc.yml` + `conf_e4_pmm_eth.yml`
+- Engine 2 stays a **separate** Condor strategy (`v37_risk_manager`)
+
+All three engines still run side-by-side. Condor is who starts E1/E4.
 
 ---
 
@@ -108,8 +122,8 @@ Copy the agent folder into your Condor `agents/` tree. Start Condor per upstream
   - `conf/e4/controllers/conf_e4_pmm_btc.yml`
   - `conf/e4/controllers/conf_e4_pmm_eth.yml`
   - `conf/e4/scripts/conf_e4_pmm.yml`
-- Live BTC/ETH snapshot from YAML: spreads **`0.0008` (5 bps)** each side, refresh **60s**, `total_amount_quote: 200`, leverage **100**, SL **0.3%**, TP **0.06%**, ONEWAY
-- Script conf also lists XRP/DOGE controller files on the live desk; those YAML files are **not** in this public pack (BTC+ETH only). Add your own if you need them.
+- Live BTC/ETH snapshot from YAML: spreads **`0.0008` (8 bps)** each side, refresh **30s**, `total_amount_quote: 800` (~$4 margin/fill at 100×), leverage **100**, SL **0.15%**, TP **0.06% LIMIT**, `time_limit` **7200s**, ONEWAY
+- Script conf is **BTC+ETH only** (no XRP/DOGE)
 
 ---
 
@@ -123,12 +137,13 @@ Point `HBOT_*` paths at your local Hummingbot/Condor installs. No keys in the HT
 
 ---
 
-## Current live snapshot (synced from desk)
+## Current pack snapshot ($800 book)
 
-- **E2 OPEN basket:** XAU-USDT, CL-USDT, DOGE-USDT, NEAR-USDT, LTC-USDT (20×)
-- **E2 model:** set `agent_key` in strategy.md (placeholder `openrouter:YOUR_MODEL_HERE` — live desk uses DeepSeek V4.1 Flash via OpenRouter)
-- **E4:** BTC-USDT + ETH-USDT only · spreads **8 bps** (`0.0008`) · TP **6 bps LIMIT** · SL **15 bps** · `time_limit` **180s** · leverage **100** · `total_amount_quote` 200
-- **E1:** max 3 slots · $10 margin · score_threshold 0.66 · closed 15m · does not open E2 basket or BTC/ETH
+- **E2 OPEN basket:** XAU-USDT, CL-USDT, DOGE-USDT, NEAR-USDT, LTC-USDT (20×) · **$25** margin
+- **E2 model:** `agent_key` placeholder `openrouter:YOUR_MODEL_HERE`
+- **E4:** BTC+ETH only · 8 bps · TP 6 bps LIMIT · SL 15 bps · refresh **30s** · time_limit **7200s** · 100× · quote **800**
+- **E1:** max 3 · **$25** · score 0.66 · does not open E2 basket or BTC/ETH
+- **Orchestrator:** Condor `manage_bots` for `quad-e1` + `quad-e4`
 
 
 ## Repo layout
@@ -151,6 +166,7 @@ quad-threat/
 │   ├── controllers/conf_v37_scalp_multi.yml
 │   └── e4/...
 ├── condor-agent/v37_risk_manager/     # Engine 2
+├── condor-agent/quad_threat_orchestrator/  # manage_bots E1+E4
 ├── condor-mcp/executors.py            # optional Condor MCP helper
 ├── scripts/                           # helpers only (acct, cancel, place, V2 wrapper)
 └── dashboard/                         # Cup UI + server
@@ -174,13 +190,13 @@ If you find a secret in a clone, rotate it and open an issue — do not paste ke
 
 1. Install upstream **Hummingbot** and **Condor** (Docker or native — follow their docs).
 2. Copy this pack’s controllers into Hummingbot `controllers/…` and confs into `conf/…` (mirror the layout above). For E4, use a separate instance/data dir as you would for `hummingbot-e4`.
-3. Copy `condor-agent/v37_risk_manager` into Condor `agents/`. Optionally install `condor-mcp/executors.py` into the hummingbot_api MCP tools path.
-4. Copy `.env.example` → `.env` for Condor / dashboard. Fill **placeholders only you control**.
-5. Configure Bitget **test/paper** credentials in Hummingbot’s connector flow (never commit them).
-6. Start dashboard: `python dashboard/hbot_dash.py` (or your usual `:8770` entrypoint) and confirm UI loads with engines **stopped**.
-7. Paper-start Engine 1, then Engine 4, then Engine 2. Confirm pair ownership before any live keys.
+3. Copy `condor-agent/v37_risk_manager` **and** `condor-agent/quad_threat_orchestrator` into Condor `agents/`. Optionally install `condor-mcp/executors.py`.
+4. Copy `.env.example` → `.env`. Fill placeholders only you control.
+5. Configure Bitget **test/paper** credentials in Hummingbot (never commit them).
+6. Upsert controller confs onto the Hummingbot API so `manage_bots` can deploy them.
+7. Paper-start **orchestrator** (deploys E1+E4), then Engine 2. Confirm pair ownership before live keys.
 
-**Do not** paste production API keys into this repo. **Do not** assume live sizing is safe for a fresh account — start tiny.
+**Do not** paste production API keys into this repo. **Do not** run the $800 sizes on a tiny live book.
 
 ---
 
@@ -199,7 +215,7 @@ These were requested if present on the desk; not included here:
 
 - `scripts/_bitget_positions.py` — not recovered into this pack
 - `controllers/directional_trading/v37_scalp.py` — optional legacy; live P&L path is `v37_scalp_multi` (generic). No Engine 3.
-- E4 XRP/DOGE controller YAML — referenced by live `conf_e4_pmm.yml` but not shipped in this public BTC+ETH pack
+- E4 XRP/DOGE controller YAML — not shipped (BTC+ETH only)
 
 ---
 
