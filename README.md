@@ -32,7 +32,7 @@ docs/
 ## Sizing (this pack is sized for an ~$800 book)
 - **E1:** `position_size_quote: 20` margin × `max_open_positions: 3` (`total_amount_quote: 60`), leverage from `universe.yml`
   (SOL/XRP 10x, else 5x). The controller's code default (`10`) is only used if the config omits the field; the YAML is authoritative.
-- **E2:** $20 margin per position, max 3. Open with `create_order_executor` MARKET; when filled, manage the **Position** (breakeven, amount, live PnL). Close = another order (full or partial). No `modify_tpsl`. Viz: routine `e2_position_board`.
+- **E2:** $20 × 3. **Hybrid:** MARKET order-executor OPEN → **hard −0.5% STOP close on the venue** (wick insurance) → agent CLOSE/PARTIAL from live PnL. No `modify_tpsl`. Viz: `e2_position_board`.
 - **E4:** BTC/ETH at 100x, 8 bps each side (one-side + inventory skew), LIMIT TP 6 bps, SL 15 bps, TIME 3 min, `total_amount_quote: 500` per pair, refresh 60s.
 Scale all sizes and the deploy drawdown caps down on a small live book.
 

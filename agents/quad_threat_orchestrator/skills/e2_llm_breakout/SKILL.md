@@ -1,73 +1,61 @@
 ---
 name: e2_llm_breakout
-description: Engine 2 — LLM breakout via stock Condor order executors. Open fills into a Position; close with a reduce order using live PnL. No exchange TP/SL amend.
+description: Engine 2 hybrid — order-executor open, hard −0.5% stop on the venue, agent closes/partials from live PnL.
 when_to_use: Any tick where the orchestrator decides whether to open, manage or close an Engine 2 position.
 created: 2026-09-29
 source: quad_threat
 ---
 
-# E2 LLM breakout — order-executor path (stock Condor)
+# E2 hybrid (stock Condor + hard stop)
 
-**POSITION MODE: ONEWAY** on Bitget. Connector must match or every open fails with "Failed to submit order".
+**POSITION MODE: ONEWAY.** Connector must match.
 
-**CONTROLLER_ID:** pass `controller_id` **both** as the top-level arg **and** inside `executor_config`. The stock risk gate cancels creates that omit it.
+**CONTROLLER_ID:** top-level **and** inside `executor_config`.
 
-## What it trades
-Stock Condor **order executors** only. 20×. Basket: **XAU-USDT, CL-USDT, DOGE-USDT, NEAR-USDT, LTC-USDT**.
-Never BTC/ETH (E4). Never stocks / SOL / XRP. Never a pair that already has an exchange position.
+## Basket
+**XAU-USDT, CL-USDT, DOGE-USDT, NEAR-USDT, LTC-USDT** at **20×**. Never BTC/ETH, stocks, SOL, XRP, or a pair already open.
 
-Do **not** use `create_position_executor` with exchange TP/SL. Do **not** call `modify_tpsl` — it does not exist on stock Condor.
+## Why hybrid
+A 5-minute LLM tick **cannot** catch a wick. So every open **must** have a **hard stop on Bitget**. The agent still **closes early / partial** from live PnL. That is how TP/SL “change”: new close orders, not `modify_tpsl` (stock Condor has no such action).
 
-## How an Engine-2 trade works (admin path)
+## Open (same tick, in order)
 
-1. **Open:** `create_order_executor` MARKET, `position_action=OPEN`, `leverage=20`, `amount` from `e2_order_sizer` (verbatim). No `take_profit`, no `stop_loss`, no `entry_price`.
-2. **When filled** you have a **Position**: breakeven price, amount, **real-time PnL**. Read it every tick via `get_portfolio_overview` (perp positions) and `list_executors`.
-3. **Close** is just another order: `create_order_executor` MARKET, `position_action=CLOSE` (or reduce). Amount = full size **or partial**. That *is* TP and SL.
-4. Confirm fill (`executor_id` + filled amount). No id / error / FAILED at start = **nothing opened**. Never `place_order`.
+1. **OPEN** `create_order_executor` MARKET, `position_action=OPEN`, `leverage=20`, `amount` from `e2_order_sizer` (verbatim). No TP/SL fields on this order. Confirm `executor_id` + fill. No id / FAILED = nothing opened.
+2. **HARD STOP (required).** Same tick after fill: `create_order_executor` `position_action=CLOSE`, **STOP** (or stop-market) at **−0.5%** from fill:
+   - LONG: `stop_price = fill * 0.995`
+   - SHORT: `stop_price = fill * 1.005`
+   Amount = **full** position. This sits on the venue. **Do not skip.** If the stop create fails, CLOSE the position market immediately — never hold a naked 20× leg.
+3. Confirm the stop working. Journal fill, stop price, both executor ids.
 
-## Sizing
-- **$20 margin** per new leg on an ~$800 book. Max **3** concurrent E2 positions.
-- Notional = margin × 20. Base amount from `manage_routines(action="run", name="e2_order_sizer", config={"pairs": "<PAIR>"})`.
-- One create per tick, at most one retry.
+Do **not** use `modify_tpsl`. Do **not** skip the stop because “you will watch PnL”.
 
-## When to close (you decide from live PnL)
+## Manage (every tick)
 
-Every tick, for each E2 position, compute `unrealised_pct` from breakeven vs mark (sign-correct for long/short):
+Run `e2_position_board` then, from breakeven vs mark:
 
 | Trigger | Action |
 |---|---|
-| Thesis invalid (broke level, opposing 1h close) | CLOSE full, market |
-| Unrealised ≤ **−0.5%** | CLOSE full (stop) |
-| Unrealised ≥ **+0.4%** | CLOSE full (take profit) **or** PARTIAL_CLOSE (leave a runner) |
-| Was ≥ +0.25% then gave it back (now ≤ +0.10%) | CLOSE full (momentum decay) |
-| None of the above | HOLD |
+| Thesis invalid | MARKET CLOSE full |
+| Unrealised ≤ **−0.5%** | MARKET CLOSE full (if the hard stop has not already filled) |
+| Unrealised ≥ **+0.4%** | MARKET CLOSE full **or** PARTIAL_CLOSE |
+| Was ≥ +0.25% then back to ≤ +0.10% | MARKET CLOSE full (decay) |
+| Else | HOLD — **hard stop stays** |
 
-Partial close: `CLOSE` order with amount < position size. Journal remaining size.
+Partial close: CLOSE order with amount < size. **Replace the hard stop** for the remaining size at the same −0.5% from **original** breakeven (or tighter: breakeven if you are locking). Never leave remainder without a stop.
 
-**15-minute same-coin cooldown** after a stop. Do not re-OPEN that name next tick.
+If you MARKET CLOSE full, cancel any leftover stop if the tool allows; else it will 404/expire — journal it.
+
+## Sizing
+**$20** margin, max **3** legs, one new open per tick, one retry.
 
 ## Visualize
-Every tick (or on demand in Condor UI):
 ```
 manage_routines(action="run", name="e2_position_board", config={})
-```
-HTML/table of pair, side, amount, breakeven, mark, PnL, PnL%. Use it before OPEN/CLOSE.
-
-Also run:
-```
 manage_routines(action="run", name="market_analysis", config={"connector_name": "bitget_perpetual", "pairs": "ALL"})
 ```
-for impulse — not to hunt MACD.
 
-## Entry (new opens only)
-Open when **≥2** of: impulse through recent high/low, clear 1h direction, expanding range / impulsive candle.
-If **0/3** slots and one basket name has 2-factor impulse → **OPEN**. Empty book is not a reason to HOLD.
-
-## Overlay (E1 / E4 / YOU)
-CLOSE those **only** on invalid thesis or **3% daily DD**. Never clip E1 at +$0.80. Never flatten E4 because it is slightly green.
+## Overlay
+Flatten E1/E4/YOU only on invalid thesis or **3% daily DD**.
 
 ## Errors
-One retry in the same tick, then STOP. Journal `e2 action failed: <msg>`. Telegram chat `0`. Do not pretend a failed create filled.
-
-## Journal (one object per tick)
-action OPEN_LONG | OPEN_SHORT | CLOSE | PARTIAL_CLOSE | HOLD · symbol · size · breakeven · pnl · notes (rule walk).
+One retry then STOP. Never report OPEN if the stop was not placed — flatten instead.

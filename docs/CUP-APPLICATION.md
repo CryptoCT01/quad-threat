@@ -44,7 +44,7 @@ Agent — AI / autonomous trading agent
 | Piece | Value |
 |---|---|
 | E1 margin | **$20** / position · max 3 · total $60 |
-| E2 | **$20** × 3 · 20× · order executor → Position → close/partial from live PnL |
+| E2 | **$20** × 3 · 20× · OPEN then **hard −0.5% stop** · agent close/partial from PnL |
 | E2 tick | 300s · 3% daily DD halt |
 | E4 quote / pair | **500** @ 100× · 8 bps · refresh **60s** · time_limit **180s** |
 | E4 DD | global 80 / controller 40 |
