@@ -187,7 +187,7 @@ async def run(config: Config, context: ContextTypes.DEFAULT_TYPE) -> RoutineResu
     lines = [
         f"E2 BASKET IMPULSE — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
         "XAU/CL/DOGE/NEAR/LTC only · 20x · 2+ of impulse / 1h dir / expanding range",
-        "No MACD. No S/R. Do not fade. Exchange banks 0.4% TP / 0.5% SL on new opens.",
+        "Close from live PnL (order-executor path). Do not fade. No exchange TP/SL amend.",
         "",
     ]
     for r in results:

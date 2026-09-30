@@ -17,7 +17,7 @@ knowledge in `skills/`, decision logic in `loops/orchestrate/`.
 | Engine | Skill | Vehicle |
 |---|---|---|
 | E1 momentum scalp | `e1_momentum_scalp` | bot `quad-e1` -> `conf_v37_scalp_multi.yml` |
-| E2 LLM breakout | `e2_llm_breakout` | position executors (DOGE/NEAR/LTC, 20x) |
+| E2 LLM breakout | `e2_llm_breakout` | **order executors** → Position (DOGE/NEAR/LTC/XAU/CL, 20x); close with reduce orders |
 | E4 BTC/ETH maker | `e4_btc_eth_maker` | bot `quad-e4` -> `conf_e4_quad_btc.yml` + `conf_e4_quad_eth.yml` |
 
 # Shared-capital allocation rule

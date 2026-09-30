@@ -1,4 +1,4 @@
-"""Engine 2 order sizer: venue-safe amount for create_position_executor. Read-only.
+"""Engine 2 order sizer: venue-safe amount for create_order_executor. Read-only.
 
 Finals fix (blockers 3 + 4). Turns "$20 margin at 20x" into a base ``amount``
 that is quantized to Bitget's size increment FIRST and still clears
