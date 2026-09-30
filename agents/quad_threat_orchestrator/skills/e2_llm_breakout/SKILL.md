@@ -20,7 +20,10 @@ A 5-minute LLM tick **cannot** catch a wick. So every open **must** have a **har
 
 ## Open (same tick, in order)
 
-1. **OPEN** `create_order_executor` MARKET, `position_action=OPEN`, `leverage=20`, `amount` from `e2_order_sizer` (verbatim). No TP/SL fields on this order. Confirm `executor_id` + fill. No id / FAILED = nothing opened.
+**NEVER pass `amount='$20'` or `amount=20`.** `$20` is a string (gate fail). `20` is **20 coins** — on DOGE that is ~$1.88 notional and the executor **TERMINATED volume 0**. `$20` is **margin**, not `amount`.
+
+0. **MUST run `e2_order_sizer` first.** Use the table `amount` for **that pair** verbatim (base coins). Example: $20 × 20× at DOGE ~$0.094 → amount **~4245**, not 20.
+1. **OPEN** `create_order_executor` MARKET, `position_action=OPEN`, `leverage=20`, `amount` = sizer number only. No TP/SL fields on this order. Confirm `executor_id` + fill. No id / FAILED = nothing opened.
 2. **HARD STOP (required).** Same tick after fill: `create_order_executor` `position_action=CLOSE`, **STOP** (or stop-market) at **−0.5%** from fill:
    - LONG: `stop_price = fill * 0.995`
    - SHORT: `stop_price = fill * 1.005`
