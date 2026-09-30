@@ -43,11 +43,11 @@ Agent — AI / autonomous trading agent
 
 | Piece | Value |
 |---|---|
-| E1 margin | **$25** / position · max 3 · total $75 |
-| E2 margin | **$25** / position · max 3 · total $75 · 20× |
+| E1 margin | **$20** / position · max 3 · total $60 |
+| E2 margin | **$20** / position · max 3 · total $60 · 20× |
 | E2 bank | LIMIT TP 0.4% · SL 0.5% |
 | E2 tick | 300s · 3% daily DD halt |
-| E4 quote / pair | **800** @ 100× · 8 bps · refresh **30s** · time_limit **7200s** |
+| E4 quote / pair | **500** @ 100× · 8 bps · refresh **60s** · time_limit **180s** |
 | E4 DD | global 80 / controller 40 |
 | LLM | `openrouter:deepseek/deepseek-v4.1-flash` (configure locally) |
 

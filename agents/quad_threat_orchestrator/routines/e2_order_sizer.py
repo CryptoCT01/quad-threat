@@ -1,6 +1,6 @@
 """Engine 2 order sizer: venue-safe amount for create_position_executor. Read-only.
 
-Finals fix (blockers 3 + 4). Turns "$25 margin at 20x" into a base ``amount``
+Finals fix (blockers 3 + 4). Turns "$20 margin at 20x" into a base ``amount``
 that is quantized to Bitget's size increment FIRST and still clears
 min_order_size and the venue minimum notional (max(min_notional_size,
 min_order_value) - Bitget perps publish minTradeUSDT as min_order_value) with
@@ -30,7 +30,7 @@ VENUE_MIN_SAFETY = Decimal("0.05")
 class Config(BaseModel):
     connector_name: str = Field(default="bitget_perpetual")
     pairs: str = Field(default="ALL", description="ALL = the 5-name E2 basket, or a comma list from it")
-    margin_quote: float = Field(default=25.0, description="Margin per E2 leg in USDT (not notional)")
+    margin_quote: float = Field(default=20.0, description="Margin per E2 leg in USDT (not notional)")
 
 
 class VenueMinimumError(ValueError):

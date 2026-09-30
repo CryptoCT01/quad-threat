@@ -18,7 +18,7 @@ LIMIT buy and sell each `buy_spreads` / `sell_spreads` (8 bps) from mid, refresh
 `total_amount_quote` split across sides; each level must clear Bitget minimums (BTC 0.0001, ETH 0.01, $5). Below-minimum levels are refused loudly ("below the venue minimum"), never silently.
 
 ## TP / SL
-LIMIT TP 6 bps, SL 15 bps, time limit 180s (3 min). Finals config: 100x leverage, `total_amount_quote: 200` per pair, refresh 60s. One-side quoting with inventory skew when inventory is held. SL and time exits execute as MARKET (PositionExecutor).
+LIMIT TP 6 bps, SL 15 bps, time limit 180s (3 min). Finals config: 100x leverage, `total_amount_quote: 500` per pair, refresh 60s. One-side quoting with inventory skew when inventory is held. SL and time exits execute as MARKET (PositionExecutor).
 
 ## Rate limits
 Refresh no faster than 60s per pair; two pairs only.
