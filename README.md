@@ -32,7 +32,6 @@ cheaply (E4 maker), while keeping every loss small and capped. Fees are Bitget V
   1.5 × the pair's typical 15-minute move (mean 15m candle range over ~24h), never tighter than 0.5% or wider than 1%.
   Margin is scaled down so one stop-out costs at most **$2.50** (stop% × 20x × margin ≤ $2.50).
 - Per-engine daily caps: E4 $40, E1 $30, E2 $15. The $80 kill switch is the binding limit for the whole book.
-- E4 quote refresh only cancels **unfilled** quotes; a filled quote is never market-closed by a refresh, it exits only by take profit, stop or the 3-minute timer.
 
 **E4 fee maths (why the maker engine makes sense)**
 - Entry and take-profit are both maker orders: 0.01% + 0.01% ≈ **2 bps** round trip.
@@ -91,7 +90,7 @@ docs/
 - **E1:** `position_size_quote: 28` margin × `max_open_positions: 4` (`total_amount_quote: 112`; set in both the conf and `universe.yml`, which the controller reads), leverage from `universe.yml`
   (SOL/XRP 10x, else 5x). The controller's code default (`10`) is only used if the config omits the field; the YAML is authoritative.
 - **E2:** up to $20 × 3 at 20x. **Hybrid:** run `e2_order_sizer` first (amount is **base coins**, never `20`; it also returns the ATR-style `stop_pct` and scaled margin). MARKET order-executor OPEN → **hard STOP close on the venue** (1.5× mean 15m range, 0.5%–1%, ≤ $2.50 risk) → agent CLOSE/PARTIAL from live PnL. No `modify_tpsl`. Viz: `e2_position_board`.
-- **E4:** BTC/ETH at 100x, 8 bps each side (one-side + inventory skew), LIMIT TP 6 bps, SL 15 bps, TIME 3 min, `total_amount_quote: 500` per pair, refresh 60s (unfilled quotes only). Pauses 30 min after a $14 realised loss in one hour.
+- **E4:** BTC/ETH at 100x, 8 bps each side (one-side + inventory skew), LIMIT TP 6 bps, SL 15 bps, TIME 3 min, `total_amount_quote: 500` per pair, refresh 60s. Pauses 30 min after a $14 realised loss in one hour.
 Scale all sizes and the deploy drawdown caps down on a small live book.
 
 ## Tests

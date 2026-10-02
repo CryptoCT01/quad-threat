@@ -22,7 +22,6 @@ LIMIT TP 6 bps, SL 15 bps, time limit 180s, refresh 60s. One-side quoting with i
 - Maker round trip ≈ 2 bps. Real TP fills averaged ≈ 5.6 bps gross (replay), so a TP nets ≈ **3.6 bps** (≈ $0.18 per $500).
 - Stop-out ≈ 15 bps move + 1 bp maker entry + 3.2 bps taker exit ≈ 19 bps (≈ $0.96 per $500). Break-even win rate on TP/SL alone ≈ 84%.
 - TIME exits are taker: small loss (replay ≈ −2.8 bps gross + 4.2 bps fees).
-- **Refresh never closes a fill.** `executor_refresh_time` and the crash/one-side pulls cancel only executors with zero fill; any filled or partly filled executor exits only by LIMIT TP, SL or TIME (`pmm_quad.executors_to_refresh`). This removes the EARLY_STOP taker leak seen in the replay.
 
 ## Pause rule (one-hour loss)
 Every tick the orchestrator journals E4 realised PnL. If E4's **realised loss over the last 60 minutes is $14 or more**:

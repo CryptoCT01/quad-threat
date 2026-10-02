@@ -50,7 +50,7 @@ Agent — AI / autonomous trading agent
 | Daily kill switch | all engines stop at **$80** day loss |
 | Daily caps | E4 $40 · E1 $30 · E2 $15 |
 | Risk manager | **E2 manages E1 + E2 open legs** (protect naked, close invalidated, lock +1%, E1 $30 cap); never opens E1, never touches E4 or manual trades |
-| E4 quote / pair | **500** @ 100× · 8 bps · TP 6 / SL 15 bps · refresh **60s** (unfilled quotes only) · time_limit **180s** · 30 min pause after $14 realised loss in 1h |
+| E4 quote / pair | **500** @ 100× · 8 bps · TP 6 / SL 15 bps · refresh **60s** · time_limit **180s** · 30 min pause after $14 realised loss in 1h |
 | E4 DD | global 40 / controller 20 |
 | LLM | `openrouter:deepseek/deepseek-v4.1-flash` (configure locally) |
 
