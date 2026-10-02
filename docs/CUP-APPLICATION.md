@@ -43,11 +43,13 @@ Agent — AI / autonomous trading agent
 
 | Piece | Value |
 |---|---|
-| E1 margin | **$20** / position · max 3 · total $60 |
-| E2 | **$20** × 3 · 20× · OPEN then **hard −0.5% stop** · agent close/partial from PnL |
-| E2 tick | 300s · 3% daily DD halt |
-| E4 quote / pair | **500** @ 100× · 8 bps · refresh **60s** · time_limit **180s** |
-| E4 DD | global 80 / controller 40 |
+| Split | $120 buffer (never deployed) · E4 ~$400 · E1 $160 · E2 $120 |
+| E1 margin | **$28** / position · max 4 · total $112 |
+| E2 | up to **$20** × 3 · 20× · OPEN then **hard ATR-style stop** (1.5× mean 15m range, 0.5–1%) · margin scaled to ≤ $2.50 risk/trade · agent close/partial from PnL |
+| E2 tick | 300s |
+| Daily kill switch | all engines stop at **$80** day loss |
+| E4 quote / pair | **1000** @ 100× · 8 bps · TP 6 / SL 15 bps · refresh **60s** · time_limit **180s** · 30 min pause after $10 realised loss in 1h |
+| E4 DD | global 40 / controller 20 |
 | LLM | `openrouter:deepseek/deepseek-v4.1-flash` (configure locally) |
 
 Do **not** paste these sizes onto a ~$60 live account.

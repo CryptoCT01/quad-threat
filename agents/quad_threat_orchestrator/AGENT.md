@@ -20,14 +20,22 @@ knowledge in `skills/`, decision logic in `loops/orchestrate/`.
 | E2 LLM breakout | `e2_llm_breakout` | **order executors** → Position (DOGE/NEAR/LTC/XAU/CL, 20x); close with reduce orders |
 | E4 BTC/ETH maker | `e4_btc_eth_maker` | bot `quad-e4` -> `conf_e4_quad_btc.yml` + `conf_e4_quad_eth.yml` |
 
-# Shared-capital allocation rule
+# Shared-capital allocation rule ($800 finals book)
 
-1. **Pool** = current account equity (from `get_portfolio_overview`) minus a 20% cash buffer that is never allocated.
-2. **Split** of the allocatable pool: **E1 45%**, **E2 25%**, **E4 30%**. An engine's configured margin (slots x margin per position) must fit inside its share; if it does not, do not deploy or open more for that engine and journal "over allocation".
-3. **Idle capital is not lent** between engines: an engine that is flat does not free its share for another engine.
-4. **Drawdown budget** = 15% of equity for the whole book, split in the same 45 / 25 / 30 ratio. Bot deploys pass the engine's share as `max_global_drawdown_quote` / `max_controller_drawdown_quote`; E2 stops opening when its share is used.
-5. **Whole-book stop:** if total drawdown reaches the 15% budget, stop opening anything new, keep existing protective orders, and alert the human. Only the human stops bots.
-6. Positions this agent did not open (not tagged `quad-e1*`, `quad-e4*` or this agent's controller_id) are never touched.
+| Bucket | Share | What it funds |
+|---|---|---|
+| Cash buffer | **$120** | Never deployed. Margin headroom only. |
+| E4 BTC/ETH maker | **~$400** | `total_amount_quote: 1000` per pair at 100x, plus SL / inventory cushion |
+| E1 momentum scalp | **$160** | 4 slots × $28 margin = $112 (leverage from `universe.yml`) |
+| E2 LLM breakout | **$120** | 3 legs × up to $20 margin at 20x (scaled down by the stop rule) |
+
+1. **Fixed split.** At $800 equity use the dollar figures above. If equity moves, scale every bucket by equity / 800 (15% buffer, 50% E4, 20% E1, 15% E2). An engine's configured margin must fit inside its share; if not, do not deploy or open more for it and journal "over allocation".
+2. **Idle capital is not lent** between engines, and the $120 buffer is never used to open anything.
+3. **Drawdown caps** (sum = the $80 daily limit): E4 $40 (`max_global_drawdown_quote: 40`, `max_controller_drawdown_quote: 20` per pair), E1 $25 (`max_global_drawdown_quote: 25`), E2 $15 (stop opening when used). E2 risk per trade ≤ $2.50 (stop% × 20 × margin).
+4. **Global daily kill switch:** journal `day_start_equity` at the first tick of each UTC day. If the day's loss (realised + unrealised) reaches **$80**, stop ALL engines: stop `quad-e1*` and `quad-e4*`, market-close every E2 leg, open nothing until the next UTC day or until the human restarts, and alert the human.
+5. **E4 pause rule:** if E4's realised loss within the last 60 minutes is **$10 or more**, stop the `quad-e4*` bot for 30 minutes, then redeploy it once (see skill `e4_btc_eth_maker`).
+6. Apart from rules 4 and 5, the agent never stops E1/E4 bots unless the human asks.
+7. Positions this agent did not open (not tagged `quad-e1*`, `quad-e4*` or this agent's controller_id) are never touched.
 
 # Hard rules
 - Never deploy a second copy of a bot: any bot whose name starts with `quad-e1` / `quad-e4` counts as present.

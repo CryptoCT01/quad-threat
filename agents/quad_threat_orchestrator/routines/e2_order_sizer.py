@@ -25,12 +25,23 @@ logger = logging.getLogger(__name__)
 E2_BASKET = ("XAU-USDT", "CL-USDT", "DOGE-USDT", "NEAR-USDT", "LTC-USDT")
 E2_LEVERAGE = 20
 VENUE_MIN_SAFETY = Decimal("0.05")
+# Finals ATR-style stop: 1.5x the mean 15m candle range, clamped to [0.5%, 1%];
+# margin scaled so stop_pct x 20 x margin <= $2.50 per trade.
+E2_MAX_MARGIN = Decimal("20")
+E2_RISK_CAP_QUOTE = Decimal("2.5")
+E2_ATR_MULT = Decimal("1.5")
+E2_STOP_MIN = Decimal("0.005")
+E2_STOP_MAX = Decimal("0.01")
 
 
 class Config(BaseModel):
     connector_name: str = Field(default="bitget_perpetual")
     pairs: str = Field(default="ALL", description="ALL = the 5-name E2 basket, or a comma list from it")
-    margin_quote: float = Field(default=20.0, description="Margin per E2 leg in USDT (not notional)")
+    margin_quote: float = Field(default=20.0, description="Max margin per E2 leg in USDT (not notional); scaled down by the stop rule")
+    mean_range_15m: float = Field(
+        default=0.0,
+        description="Mean (high-low)/close of the pair's last ~96 15m candles, as a fraction (0.004 = 0.4%). 0 = unknown -> 1% stop",
+    )
 
 
 class VenueMinimumError(ValueError):
@@ -38,6 +49,28 @@ class VenueMinimumError(ValueError):
 
 
 # ---- pure sizing (no Condor / Hummingbot imports) ------------------------------------
+def e2_stop_pct(mean_range_15m: Any) -> Decimal:
+    """ATR-style stop: 1.5 x mean 15m range, clamped to [0.5%, 1%]. Unknown (<=0) -> 1%."""
+    try:
+        r = Decimal(str(mean_range_15m or 0))
+    except Exception:
+        r = Decimal("0")
+    if not r.is_finite() or r <= 0:
+        return E2_STOP_MAX
+    return min(max(r * E2_ATR_MULT, E2_STOP_MIN), E2_STOP_MAX)
+
+
+def e2_margin_for_stop(stop_pct: Any, max_margin: Any = E2_MAX_MARGIN,
+                       risk_cap: Decimal = E2_RISK_CAP_QUOTE) -> Decimal:
+    """Largest margin (<= max_margin, cents rounded down) with stop_pct x 20 x margin <= risk_cap."""
+    cap = Decimal(str(max_margin))
+    s = Decimal(str(stop_pct))
+    if s <= 0:
+        return cap
+    m = min(cap, risk_cap / (s * Decimal(E2_LEVERAGE)))
+    return m.quantize(Decimal("0.01"), rounding=ROUND_DOWN)
+
+
 def _rule_dec(rule: Any, name: str) -> Decimal:
     if rule is None:
         return Decimal("0")
@@ -114,8 +147,14 @@ async def run(config: Config, context: ContextTypes.DEFAULT_TYPE) -> RoutineResu
             pair = p if p.endswith("-USDT") else f"{p}-USDT"
             if pair in E2_BASKET:
                 want.append(pair)
-    budget = Decimal(str(config.margin_quote)) * Decimal(E2_LEVERAGE)
-    rows, lines = [], [f"E2 sizing: ${config.margin_quote} margin x {E2_LEVERAGE}x = ${budget} notional"]
+    stop_pct = e2_stop_pct(config.mean_range_15m)
+    margin = e2_margin_for_stop(stop_pct, config.margin_quote)
+    budget = margin * Decimal(E2_LEVERAGE)
+    risk = stop_pct * budget
+    rows, lines = [], [
+        f"E2 sizing: stop {stop_pct * 100:.3f}% (1.5x mean 15m range, clamped 0.5-1%), "
+        f"${margin} margin x {E2_LEVERAGE}x = ${budget} notional, risk ${risk:.2f} (cap $2.50)"
+    ]
     for pair in want:
         try:
             rule = await trading_rules_cache.get(client, config.connector_name, pair)
@@ -132,17 +171,19 @@ async def run(config: Config, context: ContextTypes.DEFAULT_TYPE) -> RoutineResu
                 "venue_min": float(venue_min_notional(rule)),
                 "step": float(_rule_dec(rule, "min_base_amount_increment")),
                 "bumped": bumped,
+                "stop_pct": float(stop_pct),
+                "margin": float(margin),
+                "risk_quote": round(float(stop_pct * amount * px), 4),
             })
         except Exception as err:
             lines.append(f"{pair}: REFUSED - {err}")
     lines.append(
-        "Use `amount` verbatim in create_position_executor(connector_name, trading_pair, side=1|2, "
-        "amount=<number>, leverage=20, stop_loss=0.005, take_profit=0.004, open_order_type=1, "
-        "take_profit_order_type=2, controller_id=<this agent>). If the create returns no executor_id or "
-        "an error, NOTHING is open - report it (rule 15)."
+        "Use `amount` verbatim in a MARKET create_order_executor OPEN (leverage=20, controller_id=<this agent>), "
+        "then place the hard STOP close at `stop_pct` from fill (LONG fill*(1-stop_pct), SHORT fill*(1+stop_pct)). "
+        "If the create returns no executor_id or an error, NOTHING is open - report it."
     )
     return RoutineResult(
         text="\n".join(lines),
         table_data=rows,
-        table_columns=["pair", "amount", "price", "notional", "venue_min", "step", "bumped"],
+        table_columns=["pair", "amount", "price", "notional", "venue_min", "step", "bumped", "stop_pct", "margin", "risk_quote"],
     )

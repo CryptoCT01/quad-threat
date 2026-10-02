@@ -8,8 +8,8 @@
 #   - score_threshold 0.55 (require stronger agreement)
 #   - drop XAG (chop), add CL oil perp
 
-max_open_positions: 3
-position_size_quote: 20  # MARGIN per trade in USDT (notional = this × leverage)
+max_open_positions: 4  # finals $800: 4 × $28 = $112 inside the E1 $160 share (controller reads this file)
+position_size_quote: 28  # MARGIN per trade in USDT (notional = this × leverage)
 connector_name: bitget_perpetual
 position_mode: ONEWAY
 
