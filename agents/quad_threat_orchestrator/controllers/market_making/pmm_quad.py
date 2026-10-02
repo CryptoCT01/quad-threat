@@ -106,6 +106,16 @@ def venue_safe_amount(
     return q, True
 
 
+def _has_fill(x) -> bool:
+    """True once ANY part of the entry filled (then only TP / SL / TIME may close it)."""
+    if getattr(x, "is_trading", False):
+        return True
+    try:
+        return float(getattr(x, "filled_amount_quote", 0) or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
 class PMMQuadConfig(MarketMakingControllerConfigBase):
     controller_name: str = "pmm_quad"
 
@@ -322,13 +332,7 @@ class PMMQuadController(MarketMakingControllerBase):
         band = self._inventory_deadband_quote()
         if self._crash_halt():
             def _unfilled(x) -> bool:
-                if not x.is_active:
-                    return False
-                try:
-                    filled = float(getattr(x, "filled_amount_quote", 0) or 0)
-                except (TypeError, ValueError):
-                    filled = 0.0
-                return filled <= 0.5
+                return bool(x.is_active) and not _has_fill(x)
             bad = self.filter_executors(executors=self.executors_info, filter_func=_unfilled)
             return [
                 StopExecutorAction(controller_id=self.config.id, executor_id=e.id)
@@ -349,11 +353,7 @@ class PMMQuadController(MarketMakingControllerBase):
                 return False
             # Filled cover still has buy_/sell_ level_id. Do not EARLY_STOP it
             # or the LIMIT TP never prints.
-            try:
-                filled = float(getattr(x, "filled_amount_quote", 0) or 0)
-            except (TypeError, ValueError):
-                filled = 0.0
-            if filled > 0.5:
+            if _has_fill(x):
                 return False
             info = getattr(x, "custom_info", None) or {}
             lid = info.get("level_id") if isinstance(info, dict) else None
@@ -382,6 +382,27 @@ class PMMQuadController(MarketMakingControllerBase):
         # refresh and never let the LIMIT TP print (ETH 79/79 EARLY_STOP after
         # the 20:15 tune). Wrong-side quotes still get pulled above.
         return out
+
+    def executors_to_refresh(self) -> List[ExecutorAction]:
+        """Refresh = cancel/replace UNFILLED quotes only.
+
+        A stop on an executor with any fill closes that fill with a MARKET (taker)
+        order, booked as EARLY_STOP (~4.2 bps fees, the replay's main leak). Filled
+        or partially filled executors are never refreshed; they exit only by LIMIT
+        TP, SL or TIME.
+        """
+        now = self.market_data_provider.time()
+        refresh = float(self.config.executor_refresh_time or 0)
+
+        def _stale_unfilled(x) -> bool:
+            if not x.is_active or _has_fill(x):
+                return False
+            return refresh > 0 and (now - float(x.timestamp)) > refresh
+
+        return [
+            StopExecutorAction(controller_id=self.config.id, executor_id=e.id)
+            for e in self.filter_executors(executors=self.executors_info, filter_func=_stale_unfilled)
+        ]
 
     def get_levels_to_execute(self) -> List[str]:
         """Keep a level occupied until the executor is fully terminated.

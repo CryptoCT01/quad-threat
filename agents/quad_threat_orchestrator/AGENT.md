@@ -25,17 +25,18 @@ knowledge in `skills/`, decision logic in `loops/orchestrate/`.
 | Bucket | Share | What it funds |
 |---|---|---|
 | Cash buffer | **$120** | Never deployed. Margin headroom only. |
-| E4 BTC/ETH maker | **~$400** | `total_amount_quote: 1000` per pair at 100x, plus SL / inventory cushion |
+| E4 BTC/ETH maker | **~$400** | `total_amount_quote: 500` per pair at 100x, plus SL / inventory cushion |
 | E1 momentum scalp | **$160** | 4 slots × $28 margin = $112 (leverage from `universe.yml`) |
 | E2 LLM breakout | **$120** | 3 legs × up to $20 margin at 20x (scaled down by the stop rule) |
 
 1. **Fixed split.** At $800 equity use the dollar figures above. If equity moves, scale every bucket by equity / 800 (15% buffer, 50% E4, 20% E1, 15% E2). An engine's configured margin must fit inside its share; if not, do not deploy or open more for it and journal "over allocation".
 2. **Idle capital is not lent** between engines, and the $120 buffer is never used to open anything.
-3. **Drawdown caps** (sum = the $80 daily limit): E4 $40 (`max_global_drawdown_quote: 40`, `max_controller_drawdown_quote: 20` per pair), E1 $25 (`max_global_drawdown_quote: 25`), E2 $15 (stop opening when used). E2 risk per trade ≤ $2.50 (stop% × 20 × margin).
+3. **Daily drawdown caps:** E4 $40 (`max_global_drawdown_quote: 40`, `max_controller_drawdown_quote: 20` per pair), E1 $30 (`max_global_drawdown_quote: 30`; E2 also enforces it, see rule 8), E2 $15 (stop opening when used). The caps sum to $85; the $80 kill switch is the binding whole-book limit. E2 risk per trade ≤ $2.50 (stop% × 20 × margin).
 4. **Global daily kill switch:** journal `day_start_equity` at the first tick of each UTC day. If the day's loss (realised + unrealised) reaches **$80**, stop ALL engines: stop `quad-e1*` and `quad-e4*`, market-close every E2 leg, open nothing until the next UTC day or until the human restarts, and alert the human.
-5. **E4 pause rule:** if E4's realised loss within the last 60 minutes is **$10 or more**, stop the `quad-e4*` bot for 30 minutes, then redeploy it once (see skill `e4_btc_eth_maker`).
-6. Apart from rules 4 and 5, the agent never stops E1/E4 bots unless the human asks.
-7. Positions this agent did not open (not tagged `quad-e1*`, `quad-e4*` or this agent's controller_id) are never touched.
+5. **E4 pause rule:** if E4's realised loss within the last 60 minutes is **$14 or more**, stop the `quad-e4*` bot for 30 minutes, then redeploy it once (see skill `e4_btc_eth_maker`).
+6. Apart from rules 4, 5 and 8, the agent never stops E1/E4 bots unless the human asks.
+8. **E2 is the risk manager for E1 + E2** (skill `e2_llm_breakout`, section "Risk manager"): every tick it checks every E1 and E2 leg, protects naked/orphaned E1 legs, closes invalidated ones, locks E1 profit at +1%, and stops `quad-e1*` at the E1 $30 day cap. It never opens E1 legs and never touches E4 maker orders.
+9. Positions this agent did not open (not tagged `quad-e1*`, `quad-e4*` or this agent's controller_id) are never touched.
 
 # Hard rules
 - Never deploy a second copy of a bot: any bot whose name starts with `quad-e1` / `quad-e4` counts as present.

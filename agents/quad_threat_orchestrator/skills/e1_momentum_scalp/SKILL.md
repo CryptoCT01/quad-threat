@@ -30,6 +30,10 @@ Expect bursts of 429 on `GET /api/v2/public/time` (network check). Harmless if o
 - Healthy: bot `running`, real exchange order ids in logs, <= max_open_positions legs, no venue-minimum rejects.
 - Broken: container restarting, repeated "Failed to submit order", positions > slots, leverage mismatch (margin > 1.05 x budget).
 
+## Who manages open E1 legs
+The E1 controller's triple barrier manages each leg. On top of that, **E2 is the risk manager for E1** (skill `e2_llm_breakout`,
+section "Risk manager"): it protects naked/orphaned legs, closes invalidated legs, locks profit at +1% / +1.5%, and never opens E1 legs.
+
 ## When to stop
-Deploy drawdown guard (`max_global_drawdown_quote` / `max_controller_drawdown_quote`) stops it automatically. The orchestrator
-never stops it unless the human asks, or the E1 share of the shared-capital drawdown budget is exhausted (see AGENT.md).
+- E1 day loss (realised + unrealised, UTC day) reaches **$30**: E2's risk manager stops `quad-e1*` and closes all E1 legs; no redeploy until the next UTC day.
+- The $80 daily kill switch (AGENT.md), the deploy drawdown guard (`max_global_drawdown_quote: 30`), or the human.

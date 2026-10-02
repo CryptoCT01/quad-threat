@@ -22,7 +22,7 @@ Agent — AI / autonomous trading agent
 |---|---|---|
 | Orchestrator `quad_threat_orchestrator` | Condor loop that **deploys** E1 + E4 via `manage_bots` | Condor strategy |
 | Engine 1 `v37_scalp_multi` | Directional P&L — 15m ensemble, 3 slots | Hummingbot bot `quad-e1` |
-| Engine 2 `v37_risk_manager` | 300s LLM breakout + risk overlay | Condor strategy |
+| Engine 2 `e2_llm_breakout` | 300s LLM breakout + **risk manager for E1 + E2** | Condor skill |
 | Engine 4 `pmm_quad` | Two-sided quotes BTC+ETH | Hummingbot bot `quad-e4` |
 | Dashboard `:8770` | Observe stack, journal | Host UI |
 
@@ -48,7 +48,9 @@ Agent — AI / autonomous trading agent
 | E2 | up to **$20** × 3 · 20× · OPEN then **hard ATR-style stop** (1.5× mean 15m range, 0.5–1%) · margin scaled to ≤ $2.50 risk/trade · agent close/partial from PnL |
 | E2 tick | 300s |
 | Daily kill switch | all engines stop at **$80** day loss |
-| E4 quote / pair | **1000** @ 100× · 8 bps · TP 6 / SL 15 bps · refresh **60s** · time_limit **180s** · 30 min pause after $10 realised loss in 1h |
+| Daily caps | E4 $40 · E1 $30 · E2 $15 |
+| Risk manager | **E2 manages E1 + E2 open legs** (protect naked, close invalidated, lock +1%, E1 $30 cap); never opens E1, never touches E4 or manual trades |
+| E4 quote / pair | **500** @ 100× · 8 bps · TP 6 / SL 15 bps · refresh **60s** (unfilled quotes only) · time_limit **180s** · 30 min pause after $14 realised loss in 1h |
 | E4 DD | global 40 / controller 20 |
 | LLM | `openrouter:deepseek/deepseek-v4.1-flash` (configure locally) |
 
