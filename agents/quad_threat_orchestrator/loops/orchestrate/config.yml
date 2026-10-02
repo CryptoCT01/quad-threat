@@ -2,7 +2,7 @@ server_name: local
 agent_key: openrouter:deepseek/deepseek-v4.1-flash
 model_base_url: ''
 total_amount_quote: 0.0
-frequency_sec: 300
+frequency_sec: 120
 trading_context: >-
   Quad Threat shared-capital orchestrator. Follow AGENT.md allocation. Keep quad-e1 and
   quad-e4 alive via manage_bots (never duplicate). Trade E2 via stock executor tools.

@@ -22,7 +22,7 @@ Agent — AI / autonomous trading agent
 |---|---|---|
 | Orchestrator `quad_threat_orchestrator` | Condor loop that **deploys** E1 + E4 via `manage_bots` | Condor strategy |
 | Engine 1 `v37_scalp_multi` | Directional P&L — 15m ensemble, 3 slots | Hummingbot bot `quad-e1` |
-| Engine 2 `e2_llm_breakout` | 300s LLM breakout + **risk manager for E1 + E2** | Condor skill |
+| Engine 2 `e2_llm_breakout` | 120s LLM breakout + **risk manager for E1 + E2** | Condor skill |
 | Engine 4 `pmm_quad` | Two-sided quotes BTC+ETH | Hummingbot bot `quad-e4` |
 | Dashboard `:8770` | Observe stack, journal | Host UI |
 
@@ -46,7 +46,7 @@ Agent — AI / autonomous trading agent
 | Split | $120 buffer (never deployed) · E4 ~$400 · E1 $160 · E2 $120 |
 | E1 margin | **$28** / position · max 4 · total $112 |
 | E2 | up to **$20** × 3 · 20× · OPEN then **hard ATR-style stop** (1.5× mean 15m range, 0.5–1%) · margin scaled to ≤ $2.50 risk/trade · agent close/partial from PnL |
-| E2 tick | 300s |
+| E2 tick | 120s |
 | Daily kill switch | all engines stop at **$80** day loss |
 | Daily caps | E4 $40 · E1 $30 · E2 $15 |
 | Risk manager | **E2 manages E1 + E2 open legs** (protect naked, close invalidated, lock +1%, E1 $30 cap); never opens E1, never touches E4 or manual trades |
