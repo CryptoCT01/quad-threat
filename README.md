@@ -73,7 +73,7 @@ agents/quad_threat_orchestrator/
   loops/orchestrate/       # ONE loop: shared-capital allocation, E1/E4 bots, E2 decisions
   skills/                  # one SKILL.md per engine (E1, E2, E4)
   routines/                # e2_order_sizer (venue-safe sizing), market_analysis
-  controllers/             # controller code: generic/v37_scalp_multi.py, market_making/pmm_quad.py
+  controllers/             # controller code: v37_scalp_multi/v37_scalp_multi.py, pmm_quad/pmm_quad.py
   conf/                    # controller configs + E1 universe / strategy toggles
 tests/                     # pytest against the real hummingbot package
 docs/

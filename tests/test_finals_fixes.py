@@ -22,8 +22,8 @@ from hummingbot.core.data_type.common import TradeType  # noqa: E402
 from hummingbot.strategy_v2.executors.position_executor.data_types import PositionExecutorConfig  # noqa: E402
 from hummingbot.strategy_v2.models.executor_actions import CreateExecutorAction  # noqa: E402
 
-from controllers.generic import v37_scalp_multi as v37  # noqa: E402
-from controllers.market_making import pmm_quad as pmm  # noqa: E402
+from controllers.v37_scalp_multi import v37_scalp_multi as v37  # noqa: E402
+from controllers.pmm_quad import pmm_quad as pmm  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 AG = ROOT / "agents" / "quad_threat_orchestrator"
